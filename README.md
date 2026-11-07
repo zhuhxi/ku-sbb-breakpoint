@@ -6,10 +6,10 @@ Private technical package for qualification (tag `qualification`).
 
 | | |
 |---|---|
-| Kaggle file | `submission_blendD.csv` |
-| Submitted | 2026-11-07, ~18:15 UAE (UTC+4), team BreakPoint |
-| Kaggle description | `blendD: avg of 11 pairwise-rank-interaction LGB arms x2 + inter2 x1, OOF .8606` |
-| Public AUC | **0.86077** |
+| Kaggle file | `submission_blendD_r12.csv` |
+| Submitted | 2026-11-07, ~20:45 UAE (UTC+4), team BreakPoint |
+| Kaggle description | starts with `QUALIFICATION DESIGNATED: blendD_r12 ...` |
+| Public AUC | **0.86076** |
 | Out-of-fold AUC | 0.8606 (StratifiedKFold(5, shuffle, 42), whole series) |
 | Inference | `predict.py` + `ckpt/` (CPU, deterministic) |
 
@@ -17,6 +17,7 @@ Other submissions referred to in the report (identify by file name / time on the
 
 | File | Date (UAE) | Public AUC | Note |
 |---|---|---|---|
+| `submission_blendD.csv` | 2026-11-07 ~18:15 | 0.86077 | same models, ranked without rounding (differs from r12 by <= 0.0005 on a few near-ties) |
 | `submission_blendF_tabpfn.csv` | 2026-11-07 ~19:30 | 0.86324 | adds TabPFN arms (GPU); **not CPU-auditable, not designated** |
 | `submission_blendB.csv` | 2026-11-07 ~17:00 | 0.85833 | CV-weighted blend of earlier arms |
 | `submission_saf_bag6_inter.csv` | 2026-11-05 | 0.85830 | earlier best |
@@ -40,7 +41,7 @@ pip install -r requirements.txt
 python predict.py --data data --feat outputs --ckpt ckpt --out submission.csv --threads 2
 ```
 
-Verified on 2026-11-07: every arm reproduces the predictions of the training run to < 1e-15 (the pair arms take ~2.5 s each on 2 threads); the final file equals the submitted `submission_blendD.csv` (see `VERIFY.md`).
+Verified on 2026-11-07: every arm reproduces the predictions of the training run to < 1e-15 (the pair arms take ~2.5 s each on 2 threads); the final file equals the designated `submission_blendD_r12.csv` exactly (max abs diff 0.0; 31 s, 1 GB RAM; see `VERIFY.md`).
 
 ## Training (full pipeline)
 

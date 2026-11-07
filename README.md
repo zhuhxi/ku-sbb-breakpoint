@@ -6,21 +6,25 @@ Private technical package for qualification (tag `qualification`).
 
 | | |
 |---|---|
-| Kaggle file | `submission_blendD_r12.csv` |
-| Submitted | 2026-11-07, ~20:45 UAE (UTC+4), team BreakPoint |
-| Kaggle description | starts with `QUALIFICATION DESIGNATED: blendD_r12 ...` |
-| Public AUC | **0.86076** |
-| Out-of-fold AUC | 0.8606 (StratifiedKFold(5, shuffle, 42), whole series) |
-| Inference | `predict.py` + `ckpt/` (CPU, deterministic) |
+| Kaggle file | **`submission_blendG2.csv`** (GPU route) |
+| Submitted | 2026-11-07, ~22:10 UAE (UTC+4) |
+| Kaggle description | starts with `QUALIFICATION DESIGNATED (GPU route): blendG2 ...` |
+| Public AUC | **0.86386** |
+| Out-of-fold AUC | 0.8657 |
+| How it is built | `TRAINING_GPU.md`, `make_blendG2.py` (needs one GPU for the TabPFN arms) |
 
-Other submissions referred to in the report (identify by file name / time on the team's Kaggle Submissions page):
+**CPU-auditable fallback (also selected on Kaggle):** `submission_blendD_r12.csv`, public 0.86076, OOF 0.8606 —
+`predict.py` + `ckpt/` reproduce it bit-for-bit in 31 s on 2 CPU cores (`VERIFY.md`).
+
+Kaggle final selections: `submission_blendG2.csv` + `submission_blendD_r12.csv`.
+
+Other submissions referred to in the report:
 
 | File | Date (UAE) | Public AUC | Note |
 |---|---|---|---|
-| `submission_blendD.csv` | 2026-11-07 ~18:15 | 0.86077 | same models, ranked without rounding (differs from r12 by <= 0.0005 on a few near-ties) |
-| `submission_blendF_tabpfn.csv` | 2026-11-07 ~19:30 | 0.86324 | adds TabPFN arms (GPU); **not CPU-auditable, not designated** |
+| `submission_blendF_tabpfn.csv` | 2026-11-07 ~19:30 | 0.86324 | earlier GPU blend (no time reversal) |
+| `submission_blendD.csv` | 2026-11-07 ~18:15 | 0.86077 | same models as r12, ranked without rounding |
 | `submission_blendB.csv` | 2026-11-07 ~17:00 | 0.85833 | CV-weighted blend of earlier arms |
-| `submission_saf_bag6_inter.csv` | 2026-11-05 | 0.85830 | earlier best |
 
 ## Repository layout
 
@@ -28,6 +32,7 @@ Other submissions referred to in the report (identify by file name / time on the
 - `predict.py` — CPU inference for the designated submission from the frozen checkpoints.
 - `ckpt/` — frozen checkpoints: 11 pair-interaction arms × 5 folds × 3 seeds (LightGBM text models, gzip) + per-fold selected columns; interaction arm `inter_gnjt162_ck` × 5 folds × 2 seeds (selected pool columns, fill values, kept interaction list, LightGBM models).
 - `src/` — all project code (feature pipeline, synthetic generator, semi-automatic estimators, models, HPC job scripts). `src/outputs/factory/ku_gen_*.json` are the calibrated generator parameters; `src/outputs/harvest_keep.json` the kept feature list.
+- `TRAINING_GPU.md`, `make_blendG2.py` — GPU route of the designated submission (time reversal + TabPFN).
 - `TRAINING.md` — ordered recipe to regenerate every feature file and checkpoint from the raw competition data.
 - `AI_DISCLOSURE.md`, `requirements.txt`.
 

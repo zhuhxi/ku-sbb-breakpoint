@@ -14,8 +14,8 @@ sub = pd.read_csv("data/sample_submission.csv", dtype={"id": str})
 FAM = ("st_RES10", "st_ARES10", "fe", "fe2", "ar2", "cost")
 
 
-def frame(idx, part):
-    ld = lambda p: pd.read_parquet(p).reindex(idx).replace([np.inf, -np.inf], np.nan).astype(np.float32)
+def frame(idx, part, root="."):
+    ld = lambda p: pd.read_parquet(f"{root}/{p}").reindex(idx).replace([np.inf, -np.inf], np.nan).astype(np.float32)
     N = pd.concat([ld(f"outputs/factory/{f}.parquet") for f in FAM], axis=1)
     N = N.loc[:, N.columns.str.contains(r"^fe_|^fe2_|^st_|_(?:ab|ba)_|_gain$", regex=True)]
     X = pd.concat([ld(f"outputs/feat_{part}.parquet"), ld(f"outputs/harvest_{part}.parquet")[json.load(open("outputs/harvest_keep.json"))],
@@ -25,6 +25,10 @@ def frame(idx, part):
 
 XS = pd.read_parquet(f"outputs/aug/X_{TAG}.parquet"); H = pd.read_parquet(f"outputs/aug/meta_{TAG}.parquet").loc[XS.index]
 XR = pd.concat([frame(lab.index, "train"), frame(sub["id"], "test")])
+REV = os.environ.get("REV_ROOT")   # also score time-reversed real series (appended AFTER the originals; weights use originals only)
+if REV:
+    XRv = pd.concat([frame(lab.index, "train", REV), frame(sub["id"], "test", REV)])[XR.columns]; XRv.index = XRv.index.astype(str) + "_rev"
+    XR = pd.concat([XR, XRv])
 if XTRA:
     XR = pd.concat([XR, pd.read_parquet(f"outputs/aug/X_{XTRA}.parquet")[[c for c in XR.columns if c in XS.columns]]])
 cols = [c for c in XR.columns if c in XS.columns and not c.startswith("mb_")]

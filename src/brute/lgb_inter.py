@@ -53,6 +53,13 @@ lt = lambda p: pd.read_parquet(p).reindex(sub_ids).replace([np.inf, -np.inf], np
 POOL_T = pd.concat([lt("outputs/feat_test.parquet"), lt("outputs/raw_test.parquet")]
                    + ([lt(args.extra.replace("_train", "_test"))] if args.extra else []), axis=1)[POOL.columns]
 F_T = POOL_T[F.columns]
+REVR = os.environ.get("REV_ROOT")   # time-reversed copies of every pool file under REVR/outputs (same names)
+if REVR:
+    lr_ = lambda p, ids: pd.read_parquet(p).reindex(ids).replace([np.inf, -np.inf], np.nan).astype(np.float32)
+    POOL_R = pd.concat([lr_(f"{REVR}/outputs/feat_train.parquet", lab.index), lr_(f"{REVR}/outputs/raw_train.parquet", lab.index)]
+                       + ([lr_(f"{REVR}/outputs/factory/" + os.path.basename(args.extra), lab.index)] if args.extra else []), axis=1)[POOL.columns]
+    POOL_TR = pd.concat([lr_(f"{REVR}/outputs/feat_test.parquet", sub_ids), lr_(f"{REVR}/outputs/raw_test.parquet", sub_ids)]
+                        + ([lr_(f"{REVR}/outputs/factory/" + os.path.basename(args.extra).replace("_train", "_test"), sub_ids)] if args.extra else []), axis=1)[POOL.columns]
 from inter_lib import OPS, Inter, P  # noqa: E402,F401  (shared with final_inter.py)
 
 
@@ -67,8 +74,31 @@ if args.smoke:
 arms = ("base", "all 91k", "top 800")
 oof = {k: np.zeros(len(y)) for k in arms}
 tst = {k: np.zeros(len(F_T)) for k in arms}
+ONLY = [int(v) for v in os.environ["FOLDS"].split(",")] if os.environ.get("FOLDS") else None
 for f, (tr, va) in enumerate(folds):
+    if ONLY is not None and f not in ONLY: continue
     t = time.time()
+    if REVR:   # reversal variant: all-91k + top-800 arms, originals + reversed copies, TTA; per-fold npz
+        rk = lgb.train({**P, "feature_fraction": 0.3, "seed": f}, lgb.Dataset(POOL.iloc[tr], y[tr]), 600)
+        top = pd.Series(rk.feature_importance("gain"), POOL.columns).nlargest(args.top).index.tolist()
+        T, TR = POOL[top].to_numpy(), POOL_R[top].to_numpy(); Tt, TtR = POOL_T[top].to_numpy(), POOL_TR[top].to_numpy()
+        a, b = train_test_split(tr, test_size=0.1, stratify=y[tr], random_state=f); I = Inter(T[tr]); cols_all = list(range(len(top))) + I.names
+        da = lgb.Dataset(I.full(np.vstack([T[a], TR[a]])), np.r_[y[a], y[a]], params={"max_bin": 63}, free_raw_data=True).construct(); gc.collect()
+        db = lgb.Dataset(I.full(T[b]), y[b], reference=da).construct(); gc.collect()
+        res = {}
+        for s in range(args.seeds):
+            sd = 100 * f + s + args.seed_offset; m1 = train(da, db, sd, 0.1)
+            p1v = (m1.predict(I.full(T[va]), num_iteration=m1.best_iteration) + m1.predict(I.full(TR[va]), num_iteration=m1.best_iteration)) / 2
+            p1t = (m1.predict(I.full(Tt), num_iteration=m1.best_iteration) + m1.predict(I.full(TtR), num_iteration=m1.best_iteration)) / 2
+            g = pd.Series(m1.feature_importance("gain"), range(len(cols_all))); keep = [cols_all[i] for i in g.nlargest(800).index]
+            Sa = lgb.Dataset(I.select(np.vstack([T[a], TR[a]]), keep), np.r_[y[a], y[a]], params={"max_bin": 255}); Sb = lgb.Dataset(I.select(T[b], keep), y[b], reference=Sa)
+            m2 = train(Sa, Sb, sd, 0.5)
+            p2v = (m2.predict(I.select(T[va], keep), num_iteration=m2.best_iteration) + m2.predict(I.select(TR[va], keep), num_iteration=m2.best_iteration)) / 2
+            p2t = (m2.predict(I.select(Tt, keep), num_iteration=m2.best_iteration) + m2.predict(I.select(TtR, keep), num_iteration=m2.best_iteration)) / 2
+            for k_, v_ in (("all_va", p1v), ("all_te", p1t), ("top_va", p2v), ("top_te", p2t)): res[k_] = res.get(k_, 0) + v_ / args.seeds
+        np.savez(f"outputs/brute/interrev{args.tag}_f{f}.npz", va=va, **res)
+        print(f"fold {f}: rev all-91k {roc_auc_score(y[va], res['all_va']):.4f}  top800 {roc_auc_score(y[va], res['top_va']):.4f}  {time.time() - t:.0f}s", flush=True)
+        continue
     rk = lgb.train({**P, "feature_fraction": 0.3, "seed": f}, lgb.Dataset(POOL.iloc[tr], y[tr]), 600)
     top = pd.Series(rk.feature_importance("gain"), POOL.columns).nlargest(args.top).index.tolist()
     T = POOL[top].to_numpy()
@@ -115,7 +145,7 @@ for f, (tr, va) in enumerate(folds):
     gc.collect()
     print(f"fold {f}: " + "  ".join(f"{k} {roc_auc_score(y[va], oof[k][va]):.4f}" for k in arms), flush=True)
 
-if not args.smoke:
+if not args.smoke and not REVR and ONLY is None:
     rng = np.random.default_rng(0)
     idx = [rng.integers(0, len(y), len(y)) for _ in range(400)]
     for k in arms:

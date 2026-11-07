@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>KU-SBB BreakPoint qualification report</title>
+<style>
+body{font-family:"Liberation Serif","Times New Roman",serif;font-size:10.5pt;line-height:1.28;margin:0}
+h1{font-size:15pt;margin:0 0 2pt 0} h2{font-size:11.5pt;margin:9pt 0 3pt 0} p{margin:3pt 0}
+table{border-collapse:collapse;font-size:9.5pt;margin:4pt 0} td,th{border:1px solid #888;padding:1.5pt 5pt;text-align:left}
+.sub{color:#444;font-size:9.5pt} ul{margin:2pt 0 2pt 16pt;padding:0} li{margin:1pt 0}
+</style></head><body>
+<h1>KU-SBB qualification report &mdash; team BreakPoint</h1>
+<p class="sub">Designated qualification submission: <b>submission_blendD.csv</b> (Kaggle public AUC 0.86077; out-of-fold AUC 0.8606). CPU inference: <code>release/predict.py</code> with the checkpoints in <code>release/ckpt/</code>; it reproduces the submitted file to &lt;1e-15 and runs in a few minutes on 2 cores.</p>
+
+<h2>1. Task and validation design</h2>
+<p>Each series is a univariate sequence with a known boundary (period 0 / 1); the target is whether a lasting process intervention happened at the boundary (ROC-AUC). All numbers below are out-of-fold (OOF) over <b>StratifiedKFold(5, shuffle, seed 42) on whole series</b> (24,000 training series; no series is split). Everything learned from data is fitted inside the training part of a fold: early stopping uses an inner 10% split of the fold-train rows; feature selection for interaction features is redone in every fold on the inner-train rows only; pseudo-label and label-cleaning experiments were nested. Differences between variants are judged with a paired bootstrap of the OOF AUC (95% CI) and by per-fold agreement, never by the public leaderboard (public AUC on ~1,520 rows has a standard deviation of about 0.009, larger than most effects we test).</p>
+
+<h2>2. Features (all per series, computed independently of labels)</h2>
+<ul>
+<li><b>Classical change statistics</b> (<code>features.py</code>, <code>harvest.py</code>): pre/post moments, quantiles, variance ratios, Levene/KS/Mood/AD/energy tests, CUSUM/Chow-type statistics, autocorrelation and spectral changes, boundary windows of several widths. Ideas adapted from public write-ups of the 2025 ADIA structural-break challenge (no code copied; see README).</li>
+<li><b>Residual transforms</b> (<code>factory.py</code>): the same statistics on AR(10) prediction residuals and their absolute values fitted on the pre segment &mdash; the largest single gain of the project (OOF 0.833 &rarr; 0.841).</li>
+<li><b>Generator-informed likelihood features</b>: Gaussian likelihood-ratio tests for level / spread / dependence / noise-type changes with a drift-aware null (<code>probe/joint_lr.py</code>, <code>probe/noise_lr.py</code>, <code>probe/gen_feats.py</code>, <code>probe/model_feats.py</code>).</li>
+<li><b>Semi-automatic simulation features</b> (team-generated synthetic data, allowed by the rules; generator code kept in <code>probe/ku_gen.py</code>, <code>probe/sim_series_ku2.py</code>): we built a synthetic generator calibrated to the training data (families WN/AR/SIN/RW/local-level, t/GARCH noise, level/spread/dependence/shape breaks, nuisances), simulated 30k labelled fakes per bag, and trained LightGBM estimators that predict the hidden generator parameters (family, break kind, break sizes, noise type, ...) from the same feature set. Their predictions on real series form 31 columns, averaged over 6 independent fake bags (optionally realism-weighted with a real-vs-fake discriminator).</li>
+<li><b>Pairwise rank interactions</b> (<code>probe/confirm_pair.py</code>): in each fold, the top-K features by gain of a quick model fitted on the fold's inner-train rows are rank-transformed and all pairwise differences and products are added (K=60 gives 3,540 columns). This lifted the best single model from 0.8559 to 0.8575 OOF.</li>
+</ul>
+
+<h2>3. Models and the designated blend</h2>
+<p>All models are LightGBM (lr 0.02, 31 leaves, min_child 40, feature_fraction 0.5, bagging 0.8, early stopping 300 on the inner split, 3 seeds per fold). The designated submission is a fixed-weight rank blend:</p>
+<p><b>blendD = rank( 2 &times; rank(mean of 11 pair-interaction arms) + 1 &times; interaction arm "top-800" )</b>.</p>
+<p>The 11 pair arms differ in K (40&ndash;80), the seed of the per-fold feature selection and the semi-automatic feature bag; the interaction arm takes the top-162 pool features, builds ~91k pairwise operations (product, sum, difference, ratios, a&middot;b&sup2;, squares) inside each fold, and retrains on the 800 highest-gain columns. Blend weights were chosen by cross-validation over a small grid (weights picked on 4 folds, scored on the 5th) and then frozen; no weight was tuned on the public leaderboard.</p>
+<table>
+<tr><th>Model / blend</th><th>OOF AUC</th><th>Public AUC</th></tr>
+<tr><td>LightGBM, 242 classical features (baseline pipeline)</td><td>0.8327</td><td>&ndash;</td></tr>
+<tr><td>+ residual transforms, generator LR features (combo10gnj)</td><td>0.8539</td><td>0.85415</td></tr>
+<tr><td>+ semi-automatic simulation features (single LGB, bag6w)</td><td>0.8559</td><td>&ndash;</td></tr>
+<tr><td>Single pair-interaction arm (K=60)</td><td>0.8575</td><td>&ndash;</td></tr>
+<tr><td>Earlier best blend (saf + bag6 + 2 interaction arms)</td><td>0.8582</td><td>0.85830</td></tr>
+<tr><td><b>blendD (designated)</b>: 11 pair arms &times;2 + interaction top-800 &times;1</td><td><b>0.8606</b></td><td><b>0.86077</b></td></tr>
+</table>
+<p class="sub">blendD vs the earlier best: +0.0018 OOF AUC, bootstrap 95% CI [+0.0011, +0.0026], higher in all 5 folds.</p>
+
+<h2>4. Error and robustness analysis</h2>
+<ul>
+<li><b>By series family</b> (families estimated by the semi-automatic models): random-walk series are the weak spot (AUC ~0.70 vs 0.83&ndash;0.89 elsewhere, false-alarm rate ~0.5). An oracle on simulated RW series that knows the true parameters reaches only ~0.76, so most of this gap is inherent. Shape (noise-distribution) breaks are the hardest break kind (0.78). Short segments (&le;160 points) score 0.81 vs 0.89 for long ones.</li>
+<li><b>Train/test shift</b>: adversarial validation separates train from test at AUC 0.59. The driver is a group of test series whose low-order floating-point bits look rescaled (17.9% of test vs 1.7% of train); these series are almost white noise. Our predictions on them are less extreme. Importance re-weighting towards the test distribution hurt OOF (&minus;0.0047), and fold-clean pseudo-labelling gave only +0.0009 for one arm, so neither is in the designated blend.</li>
+<li><b>Ceiling</b>: on our simulator, a likelihood-ratio oracle with the true parameters reaches ~0.91, and with parameters estimated from the series ~0.86&ndash;0.87; the remaining headroom is mostly in spread, dependence and shape breaks.</li>
+<li><b>What did not help</b> (all checked with CIs): XGBoost/CatBoost/ExtraTrees/MLP/kNN/logistic arms on the same features, raw-sequence CNNs (0.75&ndash;0.83), MiniRocket-style kernels, label-noise down-weighting, per-family specialist models (their apparent gain equalled a two-seed control), and dozens of extra feature families (MOSUM, ordinal patterns, MMD, BDS/Hurst/ADF, change-point scans).</li>
+</ul>
+
+<h2>5. Limitations</h2>
+<ul>
+<li>The synthetic generator is a reverse-engineered approximation (real-vs-fake classifier AUC ~0.60 on no-break and ~0.67 on break series); the semi-automatic features inherit its biases.</li>
+<li>Many variants were compared on the same OOF folds; reported gains are paired-bootstrap CIs but not corrected for multiple comparisons, and quick-screen gains typically halved at production settings.</li>
+<li>A TabPFN (pretrained tabular foundation model) arm on the top-60 features improved OOF to 0.8641 (public 0.86324), but it cannot meet the 30-minute / 2-core CPU inference audit (it did not finish 400 rows in 10 minutes on 2 cores) and its gain did not survive clean distillation into LightGBM. It is therefore <b>not</b> part of the designated submission.</li>
+<li>The full training pipeline (feature generation, 6 synthetic bags, interaction arm) takes several hours on a multi-core HPC node; the audit route is the frozen checkpoints plus the documented training commands (TRAINING.md).</li>
+</ul>
+
+<h2>6. Reproducibility, hardware, sources and AI use</h2>
+<p><b>Inference</b>: <code>python release/predict.py --data data --feat outputs --ckpt release/ckpt --out submission.csv --threads 2</code> (LightGBM text models + per-fold selected columns; deterministic). <b>Training hardware</b>: KU Madar HPC CPU nodes (64&ndash;96 cores, Slurm), a local 32-core workstation; two local RTX 4090 GPUs were used only for exploratory TabPFN/CNN experiments that are not in the designated submission. Python 3.12/3.13, LightGBM 4.6.0, scikit-learn 1.7, NumPy 1.26, pandas 2.3, SciPy 1.16 (requirements.txt). Randomness: every split, model and generator seed is fixed in code. <b>Data</b>: only the supplied competition data plus team-generated synthetic series (generator code included); no external datasets. <b>Sources</b>: public ADIA 2025 write-ups (ideas only), Page (1954) CUSUM, Andrews (1993), Dempster et al. (2020) ROCKET, TabPFN (Hollmann et al., exploratory only). <b>AI use</b>: an AI coding assistant (Anthropic Claude, via Claude Code) helped write and run analysis code, design experiments and draft this report under continuous human review; the assistant executed code on our own machines; its context contained summary statistics, scores and occasionally a few printed values of individual series while debugging, but no competition files, label files or prediction files were uploaded to any third-party AI service (data stayed on the local workstation and the university HPC). Details in AI_DISCLOSURE.md.</p>
+</body></html>

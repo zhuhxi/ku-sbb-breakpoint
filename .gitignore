@@ -1,0 +1,10 @@
+data/
+outputs/*
+!src/outputs/
+*.parquet
+*.csv
+*.npz
+*.npy
+!ckpt/**/*.npy
+!ckpt/**/*.npz
+__pycache__/

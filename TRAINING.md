@@ -11,7 +11,7 @@ Conventions
 - Run every command from the project root (`ku_sbb/`) with `PYTHONPATH=.`. All paths are relative to it.
 - Thread count: `NTHREADS` (default 30) for the feature scripts; LightGBM threads are set by `J`, `CONF_JOBS`, `SA_JOBS` or `NTHREADS`, depending on the script.
 - Hardware: "HPC" means Madar, Slurm account kuin0094, 64 to 96 cores per job, `--exclusive`, venv `~/venvs/kusbb`.
-  Local versions: lightgbm 4.6.0, scikit-learn 1.7.2, numpy 1.26.4, pandas 2.3.3, scipy 1.16.3. The HPC venv versions are **UNCONFIRMED**.
+  Local versions: lightgbm 4.6.0, scikit-learn 1.7.2, numpy 1.26.4, pandas 2.3.3, scipy 1.16.3. HPC venv versions: `requirements-hpc-freeze.txt` (numpy 2.5.4, lightgbm 4.6.0, scikit-learn 1.7.2, pandas 2.3.3, scipy 1.16.3, pycatch22 1.0.2).
 - Row sets: train has 24,000 series and test has 4,000. Files under `outputs/factory/` hold all 28,000 ids (train + test) in one parquet.
 - Bit-exact reproduction: several scripts were edited after their outputs were made (see "Caveats"). Treat the shipped
   parquet files as the reference and compare any rebuild against them.

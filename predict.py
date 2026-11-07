@@ -1,6 +1,7 @@
 """KU-SBB team BreakPoint - CPU inference for the designated submission "blendD" (Kaggle public 0.86077).
 
-blendD = rank( 2 * rank(mean of 11 pair-arm ranks) + 1 * rank(interaction arm "top 800") ), all ranks over the 4000 test rows.
+blendD = rank( 2 * rank(mean of 11 pair-arm ranks) + 1 * rank(interaction arm "top 800") ), all ranks over the 4000 test rows;
+every vector is rounded to 12 decimals before ranking so that the output is bit-for-bit reproducible (file submission_blendD_r12.csv).
 
 Inputs (produced by the feature pipeline, see TRAINING.md):
   FEAT_DIR/feat_{train,test}.parquet, magic_b_*, harvest_*, harvest_keep.json, raw_{train,test}.parquet,
@@ -30,7 +31,7 @@ ap.add_argument("--out", default="submission.csv"); ap.add_argument("--threads",
 args = ap.parse_args(); t0 = time.time()
 lab = pd.read_csv(f"{args.data}/train_labels.csv", dtype={"id": str}).set_index("id")["label"]
 sub = pd.read_csv(f"{args.data}/sample_submission.csv", dtype={"id": str})
-r = lambda a: rankdata(a) / len(a)
+r = lambda a: rankdata(np.round(a, 12)) / len(a)   # round first: ranks must not depend on 1e-16 float noise
 def booster(path):
     """LightGBM text model, stored gzip-compressed in the repo (identical predictions to the uncompressed file)."""
     if os.path.exists(path): return lgb.Booster(model_file=path)

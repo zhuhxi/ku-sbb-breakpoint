@@ -6,15 +6,17 @@ Private technical package for qualification (tag `qualification`).
 
 | Kaggle submission ID | File | Public AUC | OOF AUC | Notes |
 |---|---|---|---|---|
-| **58123057** | `submission_blendNFS.csv` | **0.87416** | 0.8706 | best public score; GPU route |
-| 58126032 | `submission_blendOFS.csv` | 0.87356 | 0.8710 | best out-of-fold score; GPU route |
+| submitted 2026-11-08 ~22:52 UAE | **`submission_blendRFS.csv`** | **0.87550** | **0.8719** | best public and best OOF; **selected on Kaggle**; GPU route |
+| 58123057 | `submission_blendNFS.csv` | 0.87416 | 0.8706 | GPU route |
+| 58126032 | `submission_blendOFS.csv` | 0.87356 | 0.8710 | GPU route |
 
 New since blendG2: CNN pretrained on synthetic series whose break class also contains transient nuisances (zero-shot AUC 0.83 without
 real labels), forecast-error features from the public Chronos-2 and TimesFM-2.5 foundation models, four new TabPFN groups, full-training-set
-TabPFN refits for test predictions, and a TabPFN stacker. Recipe: **`TRAINING_LATEST.md`**; checkpoints of the pretrained CNNs: `ckpt/seq/`;
+TabPFN refits for test predictions, and a TabPFN stacker; blendRFS adds the public Chronos-2 model fine-tuned on our synthetic
+series as a break classifier (zero-shot AUC 0.84 without real labels) and three TabPFN groups on its embeddings.
+**How to reproduce blendRFS: `TRAINING_LATEST.md`, section 5** (sections 1-4 are its prerequisites); checkpoints of the pretrained CNNs: `ckpt/seq/`;
 stacker inputs: `manifests/`; updated 3-page report: **`report_final.pdf`** (`REPORT_CHANGELOG.md`).
-If the organisers allow it, we would like the best version (submission ID 58123057) to be considered; the designated qualification
-submission below is unchanged.
+The designated qualification submission below is unchanged.
 
 ## Designated qualification submission
 
@@ -28,10 +30,11 @@ submission below is unchanged.
 | Out-of-fold AUC | 0.8657 |
 | How it is built | `TRAINING_GPU.md`, `make_blendG2.py` (needs one GPU for the TabPFN arms) |
 
-**CPU-auditable fallback (also selected on Kaggle):** `submission_blendD_r12.csv` (submission ID 58097903), public 0.86076, OOF 0.8606 —
+**CPU-auditable fallback:** `submission_blendD_r12.csv` (submission ID 58097903), public 0.86076, OOF 0.8606 —
 `predict.py` + `ckpt/` reproduce it bit-for-bit in 31 s on 2 CPU cores (`VERIFY.md`).
 
-Kaggle final selections: `submission_blendG2.csv` + `submission_blendD_r12.csv`.
+Kaggle final selections (changed 2026-11-08 ~23:30 UAE): **`submission_blendRFS.csv` + `submission_blendG2.csv`**.
+`submission_blendD_r12.csv` is no longer selected but stays the CPU-auditable, bit-exact reference (`predict.py`, `VERIFY.md`).
 
 Other submissions referred to in the report:
 

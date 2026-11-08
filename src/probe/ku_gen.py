@@ -184,7 +184,10 @@ def gen(P, seed, brk):
     if fam == "SIN":
         amp = r.choice(catalog()["sin"]) * z.std() if P.get("cat_sin") else r.uniform(*P["sin_amp"])
         per = r.integers(12, 33); hid["sin_amp"], hid["sin_per"] = float(amp), int(per)
-        x = (z + amp * np.sin(2 * np.pi * t / per + r.uniform(0, 6.3))) * P["sin_scale"]
+        ph0 = r.uniform(0, 6.3); A_ = np.full(n, amp)
+        if brk and P.get("sin_brk_p", 0) and r.random() < P["sin_brk_p"]:   # the break also changes the sine amplitude
+            A_[n0:] = amp * np.exp(sgn(r) * r.uniform(*P.get("sin_brk_k", (.3, .8))))
+        x = (z + A_ * np.sin(2 * np.pi * t / per + ph0)) * P["sin_scale"]
     elif fam == "RW":
         x = np.cumsum(z)
     elif fam == "LL":
@@ -225,10 +228,16 @@ def gen(P, seed, brk):
                 step[n0 + lag:] = d
         else:
             step[n0:] = d
+        if fam == "RW" and P.get("rw_drift"):          # RW level break as a DRIFT change: slope d / rw_drift per point after n0
+            step = np.zeros(n); step[n0:] = d * np.arange(1, n - n0 + 1) / P["rw_drift"]; hid["lvl_mode"] = 3
         x = x + step
     if (fam in ("WN", "AR1", "AR2") or P.get("trend_fams") == "all") and r.random() < P["trend_p"]:
         x = x + sgn(r) * r.uniform(*P["trend"]) * x.std() * t / n
         hid["trend"] = 1
+    if not brk and P.get("pre_shift_p", 0) and r.random() < P["pre_shift_p"]:   # no-break series with a lasting change INSIDE the pre segment (not at n0)
+        c = int(r.integers(max(20, n0 // 4), max(21, n0 - 20))); u = r.random(); sdp = x[:n0].std()
+        if u < .5: x = x.copy(); x[c:] += sgn(r) * r.uniform(.5, 1.5) * sdp
+        else: mx = x[c:].mean(); x = x.copy(); x[c:] = mx + (x[c:] - mx) * np.exp(sgn(r) * r.uniform(.2, .7))
     NB = P.get("nuis_brk", ("decoy", "vburst", "drift") if P.get("decoy_in_breaks") else ())
     if not brk or NB:
         sd = x[:n0].std()

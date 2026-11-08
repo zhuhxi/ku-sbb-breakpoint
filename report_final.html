@@ -1,0 +1,116 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>KU-SBB BreakPoint final report</title>
+<style>
+@page{size:A4;margin:12mm 14mm}
+body{font-family:"Liberation Serif","Times New Roman",serif;font-size:10pt;line-height:1.24;margin:0}
+h1{font-size:15pt;margin:0 0 2pt 0} h2{font-size:11.5pt;margin:9pt 0 3pt 0} p{margin:3pt 0}
+table{border-collapse:collapse;font-size:9.5pt;margin:4pt 0} td,th{border:1px solid #888;padding:1.5pt 5pt;text-align:left}
+.sub{color:#444;font-size:9.5pt} figure{break-inside:avoid} ul{margin:2pt 0 2pt 16pt;padding:0} li{margin:1pt 0}
+</style></head><body>
+<h1>Detecting persistent structural breaks with time reversal, synthetic pretraining and TabPFN &mdash; team BreakPoint</h1>
+<p class="sub"><b>Summary.</b> Best: <b>blendNFS</b> (ID 58123057) public <b>0.87416</b>, OOF 0.8706; blendOFS (ID 58126032) OOF 0.8710, public 0.87356 (TRAINING_LATEST.md). &sect;3&ndash;4 analyse blendK (public 0.86971, OOF 0.8684). Qualification submission: blendG2 (public 0.86386, OOF 0.8657). CPU-only fallback blendD_r12 (public 0.86076, OOF 0.8606), reproduced bit-for-bit by <code>predict.py</code> in 31 s on 2 cores. Most of the gain comes from four ideas: residual-transform change statistics (+0.008 OOF), TabPFN on per-fold top-K features (+0.006 over LightGBM alone), time-reversal augmentation (+0.002) and features from a CNN pretrained on our own synthetic series (+0.0007). The last three are measured by ablation of the final blend (&sect;3).</p>
+
+<figure style="margin:4pt 0 2pt 0"><svg viewBox="0 0 700 92" width="100%" font-family="Liberation Sans,Arial" font-size="8.3">
+<defs><marker id="ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7z" fill="#444"/></marker></defs>
+<g fill="#f2f2f2" stroke="#666">
+<rect x="2" y="30" width="78" height="32" rx="3"/><rect x="104" y="4" width="128" height="26" rx="3"/><rect x="104" y="33" width="128" height="26" rx="3"/><rect x="104" y="62" width="128" height="26" rx="3"/>
+<rect x="258" y="4" width="132" height="26" rx="3"/><rect x="258" y="33" width="132" height="26" rx="3"/><rect x="258" y="62" width="132" height="26" rx="3"/>
+<rect x="416" y="18" width="128" height="26" rx="3"/><rect x="416" y="48" width="128" height="26" rx="3"/>
+<rect x="570" y="30" width="126" height="32" rx="3" fill="#e4ecf7"/></g>
+<g text-anchor="middle" fill="#111">
+<text x="41" y="44">24k train +</text><text x="41" y="55">4k test series</text>
+<text x="168" y="15">change statistics on raw +</text><text x="168" y="26">AR(10) residual transforms</text>
+<text x="168" y="44">generator LR + simulation</text><text x="168" y="55">(semi-automatic) features</text>
+<text x="168" y="73">CNN pretrained on 600k</text><text x="168" y="84">own synthetic series</text>
+<text x="324" y="15">time reversal: every family</text><text x="324" y="26">recomputed on reversed series</text>
+<text x="324" y="44">per-fold top-K selection</text><text x="324" y="55">(inner-train rows only)</text>
+<text x="324" y="73">pairwise rank interactions</text><text x="324" y="84">(diff, product)</text>
+<text x="480" y="29">LightGBM arms</text><text x="480" y="40">(pair, interaction, reversal)</text>
+<text x="480" y="59">TabPFN 3.5 arms</text><text x="480" y="70">(raw, side-by-side, rev-context)</text>
+<text x="633" y="44">fixed-weight rank blend</text><text x="633" y="55">blendK  OOF .8684</text></g>
+<g stroke="#444" fill="none" marker-end="url(#ar)"><path d="M80,46 L102,17"/><path d="M80,46 L102,46"/><path d="M80,46 L102,75"/>
+<path d="M232,46 L256,46"/><path d="M232,17 L256,17"/><path d="M232,75 L256,75"/>
+<path d="M390,17 L414,31"/><path d="M390,46 L414,61"/><path d="M390,75 L414,33"/><path d="M544,31 L568,44"/><path d="M544,61 L568,50"/></g></svg>
+<figcaption class="sub">Figure 1. Pipeline. Label-dependent steps are fitted inside each training fold; the CNN and reversed features use no labels.</figcaption></figure>
+<h2>1. Task and validation design</h2>
+<p>Each series is a univariate sequence with a known boundary (period 0 / 1); the target is whether a lasting process intervention happened at the boundary (ROC-AUC). All numbers below are out-of-fold (OOF) over <b>StratifiedKFold(5, shuffle, seed 42) on whole series</b> (24,000 training series; no series is split). Everything learned from data is fitted inside the training part of a fold: early stopping uses an inner 10% split of the fold-train rows; feature selection for interaction features is redone in every fold on the inner-train rows only; pseudo-label and label-cleaning experiments were nested. A reversed copy always stays in the fold of its original series, so a validation series never enters training or a TabPFN context in either direction. The synthetic CNN is pretrained without any real label. Differences between variants are judged with a paired bootstrap of the OOF AUC (95% CI) and by per-fold agreement, never by the public leaderboard (public AUC on ~1,520 rows has a standard deviation of about 0.009, larger than most effects we test).</p>
+
+<h2>2. Features (all per series, computed independently of labels)</h2>
+<ul>
+<li><b>Classical change statistics</b> (<code>features.py</code>, <code>harvest.py</code>): pre/post moments, quantiles, variance ratios, Levene/KS/Mood/AD/energy tests, CUSUM/Chow-type statistics, autocorrelation and spectral changes, boundary windows of several widths. Ideas adapted from public write-ups of the 2025 ADIA structural-break challenge (no code copied; see README).</li>
+<li><b>Residual transforms</b> (<code>factory.py</code>): the same statistics on AR(10) prediction residuals and their absolute values fitted on the pre segment &mdash; the largest single gain of the project (OOF 0.833 &rarr; 0.841).</li>
+<li><b>Generator-informed likelihood features</b>: Gaussian likelihood-ratio tests for level / spread / dependence / noise-type changes with a drift-aware null (<code>probe/joint_lr.py</code>, <code>probe/noise_lr.py</code>, <code>probe/gen_feats.py</code>, <code>probe/model_feats.py</code>).</li>
+<li><b>Semi-automatic simulation features</b> (<code>probe/ku_gen.py</code>, <code>probe/sim_series_ku2.py</code>; team-generated synthetic data, allowed by the rules): a generator calibrated to the training data (WN/AR/SIN/RW/local-level families, t/GARCH noise, level/spread/dependence/shape breaks, nuisances) produces 30k labelled fakes per bag. LightGBM estimators trained on them predict the hidden generator parameters (family, break kind and sizes, noise type) of each real series: 31 columns, averaged over 6 bags.</li>
+<li><b>Time-reversal augmentation</b>: a structural change at the boundary is still a change when the series is read backwards, so every series is reversed (boundary at n&minus;n<sub>0</sub>, same label), all feature families are recomputed on the reversed series, models are trained on originals + reversed copies and predict the mean of both (test-time augmentation). Single pair arm 0.8575 &rarr; 0.8599 OOF (+0.0025, CI [+0.0009, +0.0041]). Negation and cropping were tested the same way and did not hold up.</li>
+<li><b>Synthetic-pretrained CNN features</b> (<code>probe/sim_tensor.py</code>, <code>probe/seq_pretrain.py</code>, <code>probe/seq_emb.py</code>): a dilated 1-D CNN (64 channels) is pretrained on 600k of our own synthetic series, aligned at the boundary (z-scored values, AR(10) residuals, period mask). It predicts break / no break plus the hidden generator parameters (break kind, family, break sizes, noise type, GARCH, decoy, trend) as auxiliary tasks. Without seeing any real label it reaches AUC 0.81 on the real training series. Its 512-d embedding (PCA to 32) and the head outputs become 53 label-free features, computed for every series and for its reversed copy. Two extra pretraining epochs left zero-shot AUC unchanged (0.810) but raised the best TabPFN arm from 0.8658 to 0.8672.</li>
+<li><b>Pairwise rank interactions</b> (<code>probe/confirm_pair.py</code>): in each fold, the top-K features by gain of a quick model fitted on the fold's inner-train rows are rank-transformed and all pairwise differences and products are added (K=60 gives 3,540 columns). This lifted the best single model from 0.8559 to 0.8575 OOF.</li>
+</ul>
+
+<h2>3. Models and the final blend</h2>
+<p><b>LightGBM arms</b> (lr 0.02, 31 leaves, min_child 40, feature_fraction 0.5, bagging 0.8, early stopping 300 on the inner split, 3 seeds per fold). <b>TabPFN arms</b>: the public pretrained TabPFN&nbsp;3.5 run on each fold's top-K features (K&nbsp;40&ndash;100, whole fold-train as context, 8 estimators). The best TabPFN input is the raw values of the top-K features plus the synthetic-pretrained CNN features, for the series and for its time-reversed copy side by side (single-arm OOF 0.8672). The final submission is a fixed-weight rank blend of arm groups (each group = mean of ranks):</p>
+<p><b>blendK = rank( 2&middot;pair + 1&middot;interaction + 2&middot;reversal-pair + 6&middot;rev-context TabPFN + 9&middot;CNN-feature TabPFN + 3&middot;rev-context CNN TabPFN + 9&middot;raw TabPFN + 3&middot;rev-context raw TabPFN + 9&middot;raw side-by-side TabPFN + 24&middot;raw side-by-side TabPFN with longer-pretrained CNN )</b>. The CPU fallback blendD uses only the first two groups.</p>
+<p>The 11 pair arms differ in K (40&ndash;80), the seed of the per-fold feature selection and the semi-automatic feature bag; the interaction arm takes the top-162 pool features, builds ~91k pairwise operations (product, sum, difference, ratios, a&middot;b&sup2;, squares) inside each fold, and retrains on the 800 highest-gain columns. The LightGBM weights (2/1/2) were chosen by cross-validation over a small grid (picked on 4 folds, scored on the 5th). Each later TabPFN group was added with one weight from {3, 6, 9, 24}, kept only if the OOF gain had a bootstrap CI above zero and held in all 5 folds. These weights were chosen on the full OOF, so the last gains (+0.0003 to +0.0007 each) may be slightly optimistic. No weight was ever tuned on the public leaderboard.</p>
+<table>
+<tr><th>Model / blend</th><th>OOF AUC</th><th>Public AUC</th></tr>
+<tr><td>LightGBM, 242 classical features (baseline pipeline)</td><td>0.8327</td><td>&ndash;</td></tr>
+<tr><td>+ residual transforms, generator LR features (combo10gnj)</td><td>0.8539</td><td>0.85415</td></tr>
+<tr><td>+ semi-automatic simulation features (single LGB, bag6w)</td><td>0.8559</td><td>&ndash;</td></tr>
+<tr><td>Single pair-interaction arm (K=60)</td><td>0.8575</td><td>&ndash;</td></tr>
+<tr><td>Earlier best blend (saf + bag6 + 2 interaction arms)</td><td>0.8582</td><td>0.85830</td></tr>
+<tr><td>blendD / blendD_r12 (CPU fallback): 11 pair arms &times;2 + interaction &times;1</td><td>0.8606</td><td>0.86076</td></tr>
+<tr><td>+ 8 TabPFN arms (blendF)</td><td>0.8641</td><td>0.86324</td></tr>
+<tr><td>blendG2 (qualification): + time-reversal pair arms + reversed-context TabPFN</td><td>0.8657</td><td>0.86386</td></tr>
+<tr><td>+ TabPFN with synthetic-pretrained CNN features (blendH)</td><td>0.8669</td><td>&ndash;</td></tr>
+<tr><td>+ raw-value TabPFN inputs (blendI) / original+reversed side by side (blendJ)</td><td>0.8674 / 0.8677</td><td>&ndash;</td></tr>
+<tr><td><b>blendK</b>: + side-by-side TabPFN on longer-pretrained CNN features</td><td><b>0.8684</b></td><td><b>0.86971</b></td></tr>
+<tr><td><b>blendNFS</b>: + nuisance-pretrained CNN, Chronos-2, TabPFN stacker</td><td>0.8706</td><td><b>0.87416</b></td></tr>
+<tr><td>blendOFS: + TimesFM-2.5 group</td><td><b>0.8710</b></td><td>0.87356</td></tr>
+</table>
+<p class="sub">Each step is a paired-bootstrap improvement that is higher in all 5 folds: blendD +0.0018 vs earlier best; blendG2 +0.0016 [+0.0010, +0.0022] vs blendF; blendK +0.0007 [+0.0003, +0.0010] vs blendJ. The stacker range is over three outer-CV seeds.</p>
+<table><tr><th>Ablation of blendK (groups removed, other weights unchanged)</th><th>OOF AUC</th><th>&Delta; [95% CI]</th><th>folds down</th></tr>
+<tr><td>blendK (all 10 groups)</td><td>0.8684</td><td>&ndash;</td><td>&ndash;</td></tr>
+<tr><td>&minus; all TabPFN groups (LightGBM only)</td><td>0.8627</td><td>&minus;0.0057 [&minus;0.0067, &minus;0.0044]</td><td>5/5</td></tr>
+<tr><td>&minus; all groups that use time reversal</td><td>0.8665</td><td>&minus;0.0019 [&minus;0.0026, &minus;0.0013]</td><td>5/5</td></tr>
+<tr><td>&minus; groups with synthetic-pretrained CNN features</td><td>0.8677</td><td>&minus;0.0007 [&minus;0.0009, &minus;0.0004]</td><td>5/5</td></tr>
+<tr><td>&minus; all LightGBM groups (TabPFN only)</td><td>0.8684</td><td>+0.0001 [0.0000, +0.0002]</td><td>1/5</td></tr></table>
+<p class="sub">Reading: at the final stage the LightGBM arms add no measurable AUC on top of the TabPFN groups, but they carry the CPU-only fallback and they choose the top-K features that every TabPFN arm uses.</p>
+
+
+<h2>4. Error and robustness analysis</h2>
+<ul>
+<li><b>By series family</b> (estimated by the semi-automatic models; blendK vs CPU fallback blendD): white noise 0.870 vs 0.864, AR(1) 0.867 vs 0.864, AR(2) 0.879 vs 0.877, sinusoid 0.903 vs 0.891, local level 0.848 vs 0.833, <b>random walk 0.710 vs 0.702</b>. Random walks remain the weak spot; an oracle on simulated random walks that knows the true parameters reaches only ~0.76, so most of this gap is inherent. By shorter segment length: &le;160 points 0.815, 160&ndash;400 0.876, &gt;400 0.907. The GPU models gain in every group, most on sinusoids and local-level series.</li>
+<li><b>Train/test shift</b>: adversarial validation separates train from test at AUC 0.59. The driver is a group of test series whose low-order floating-point bits look rescaled (17.9% of test vs 1.7% of train); these series are almost white noise. blendK is less certain on them (mean |rank &minus; 0.5| 0.19 vs 0.26) and only slightly shifted (mean rank 0.53 vs 0.49). Importance re-weighting towards the test distribution hurt OOF (&minus;0.0047), and fold-clean pseudo-labelling gave only +0.0009 for one arm, so neither is in the final blend.</li>
+<li><b>Leaderboard noise</b>: AUC of blendK on 4,000 random 1,520-row subsets of the training OOF (the public-test size) has standard deviation 0.0089 (95% range 0.850&ndash;0.885); on 2,480 rows (the private-test size) it is 0.0067. Our public 0.86971 is in line with the OOF 0.8684. Public gaps between teams below about 0.01 are therefore not reliable, which is why we choose models by OOF and never tune on the public score.</li>
+<li><b>Ceiling</b>: on our simulator, a likelihood-ratio oracle that knows the true parameters reaches ~0.91. The same oracle with parameters estimated from each series reaches ~0.86&ndash;0.87. blendK (0.8684) is already at this plug-in level, so further gains need better estimates of spread, dependence and shape changes on short segments, not more model capacity.</li>
+<li><b>What did not help</b> (each tested with paired-bootstrap CIs; &Delta; = change of the best blend at that time):
+<table style="font-size:8.8pt"><tr><th>Idea</th><th>Result</th><th>Idea</th><th>Result</th></tr>
+<tr><td>XGBoost / CatBoost / ExtraTrees / MLP / kNN arms</td><td>&Delta; &le; 0</td><td>Negation and cropping augmentation</td><td>&Delta; 0 / &minus;0.004</td></tr>
+<tr><td>Raw-sequence CNNs, MiniRocket kernels</td><td>OOF 0.75&ndash;0.83, &Delta; &le; 0</td><td>Fine-tuned CNN (real labels)</td><td>OOF 0.818, hurts blend</td></tr>
+<tr><td>Per-family specialist models</td><td>= two-seed control</td><td>TabPFN fine-tuning (per fold)</td><td>no epoch beats epoch 0</td></tr>
+<tr><td>Label-noise down-weighting</td><td>+0.0011, n.s.</td><td>TabICL instead of TabPFN</td><td>OOF 0.8567, &Delta; &minus;0.0002</td></tr>
+<tr><td>Pseudo-labels (LightGBM / TabPFN context)</td><td>+0.0009 / 0</td><td>Second simulator, self-supervised detector</td><td>corr 0.99, &Delta; 0</td></tr>
+<tr><td>Importance weighting to test shift</td><td>&minus;0.0047</td><td>Chronos forecast-error features</td><td>hurts TabPFN</td></tr>
+<tr><td>Logistic / LightGBM stacking</td><td>&minus;0.0020 / &minus;0.0007</td><td>Distilling TabPFN into LightGBM</td><td>student 0.8572, &Delta; 0</td></tr>
+<tr><td colspan="4">Dozens of extra feature families (MOSUM, ordinal patterns, MMD, BDS/Hurst/ADF, change-point scans): each &le; +0.0001.</td></tr></table></li>
+</ul>
+
+<h2>5. Limitations</h2>
+<ul>
+<li>The synthetic generator is a reverse-engineered approximation (real-vs-fake classifier AUC ~0.60 on no-break and ~0.67 on break series); the semi-automatic features inherit its biases.</li>
+<li>Many variants were compared on the same OOF folds; reported gains are paired-bootstrap CIs but not corrected for multiple comparisons, and quick-screen gains typically halved at production settings.</li>
+<li><b>Resources.</b> Our best models need a GPU. TabPFN did not finish predicting 100 test rows in 7 minutes on 2 CPU cores, and distilling it into LightGBM lost the gain. The CPU-only route reaches OOF 0.8641 (LightGBM + reversal + CNN-feature pair arms), 0.0043 below blendK. We therefore ask that the final audit allow <b>one consumer GPU (&ge;16&nbsp;GB)</b>: blendK inference runs in minutes on it. With more GPU time we would pretrain a larger CNN on more synthetic series: better pretraining was the last change that still raised the score, whereas more TabPFN bags had saturated.</li>
+<li>Full training (features, 6 synthetic bags, interaction arm) takes several hours on a multi-core HPC node; the audit route uses frozen checkpoints plus the documented commands (TRAINING.md).</li>
+</ul>
+
+<h2>6. Reproducibility, hardware, sources and AI use</h2>
+<table style="font-size:8.8pt"><tr><th>Submission</th><th>Route</th><th>How to reproduce</th><th>Cost</th></tr>
+<tr><td>blendD_r12 (CPU fallback)</td><td>LightGBM only</td><td><code>predict.py</code> + frozen checkpoints in <code>ckpt/</code>; output equal to the Kaggle file bit for bit</td><td>31 s, 1 GB, 2 cores</td></tr>
+<tr><td>blendG2 (qualification)</td><td>+ TabPFN</td><td>TRAINING_GPU.md + <code>make_blendG2.py</code>; reproduces the Kaggle file exactly</td><td>minutes on one GPU</td></tr>
+<tr><td>blendK / blendNFS / blendOFS (best)</td><td>+ CNN, forecasters</td><td>TRAINING_LATEST.md, <code>ckpt/seq/</code>, <code>manifests/</code></td><td>one GPU</td></tr></table>
+<p><b>Rounding rule</b>: every arm vector is rounded to 12 decimals before ranking, so ties do not depend on floating-point noise. <b>Training hardware</b>: KU Madar HPC CPU nodes (64&ndash;96 cores, Slurm), a local 32-core workstation; two local RTX 4090 GPUs for the TabPFN arms and for CNN pretraining (one GPU is enough). Python 3.12/3.13, LightGBM 4.6.0, scikit-learn 1.7, NumPy 1.26, pandas 2.3, SciPy 1.16 (requirements.txt). Randomness: every split, model and generator seed is fixed in code. <b>Data</b>: only the supplied competition data plus team-generated synthetic series (generator code included); no external datasets. <b>Sources</b>: public ADIA 2025 write-ups (ideas only); Page (1954) CUSUM; Andrews (1993) tests for unknown change points; Dempster et al. (2020) ROCKET; Hollmann et al. (2025, <i>Nature</i>) TabPFN, version 3.5 public pretrained weights; Bai et al. (2018) temporal convolutional networks (dilated CNN design); Chronos-2, TimesFM-2.5 (Das et al., 2024) public forecasters; time-reversal augmentation follows the general data-augmentation literature for time series (Wen et al., 2021). <b>AI use</b>: an AI coding assistant (Anthropic Claude, via Claude Code) helped write and run analysis code, design experiments and draft this report under continuous human review; the assistant executed code on our own machines; its context contained summary statistics, scores and occasionally a few printed values of individual series while debugging, but no competition files, label files or prediction files were uploaded to any third-party AI service (data stayed on the local workstation and the university HPC). Details in AI_DISCLOSURE.md.</p>
+<h2>7. What we learned</h2>
+<ul>
+<li><b>Representation beat model choice</b>: every large gain was new information (residual transforms, generator likelihoods, reversed series, synthetic-pretrained CNN features); swapping learners on the same features never helped.</li>
+<li><b>Use the task's structure</b>: a lasting change is still a change when read backwards, so time reversal gave free training data and a second view of every test series.</li>
+<li><b>Measure noise first</b>: paired bootstrap CIs plus a 5-of-5-folds rule filtered out dozens of false leads (&sect;4).</li></ul>
+</body></html>

@@ -7,7 +7,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 sys.path.insert(0, "probe"); import feats
 K, tag, fam, REV = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]; NS = 3; t0 = time.time(); y = feats.y
-fams = feats.FAMS[:-1] + [fam]
+fams = feats.FAMS[:-1] + fam.split(",")
 X = feats.frame(feats.lab.index, "train", fams); X = X.loc[:, ~X.columns.duplicated()]; cols = X.columns
 Xt = feats.frame(feats.sub["id"], "test", fams)[cols]
 cwd = os.getcwd(); A = [X.to_numpy(np.float32), Xt.to_numpy(np.float32)]

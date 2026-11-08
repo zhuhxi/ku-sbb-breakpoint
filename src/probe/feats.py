@@ -1,7 +1,7 @@
 """Load the production feature set of combo10gnjbag6 (train X, test Xt in sample-submission order)."""
 import json, numpy as np, pandas as pd
 FAMS = ["st_RES10", "st_ARES10", "fe", "fe2", "ar2", "cost", "genA", "genB", "gnoise", "gjlr", "semiauto_bag6"]
-PAT = r"^fe_|^fe2_|^st_|_(?:ab|ba)_|_gain$|^g_|^saf_"
+PAT = r"^fe_|^fe2_|^st_|_(?:ab|ba)_|_gain$|^g_|^saf_|^se_|^cb_|^d_|^l_|^cbb_|^cbl_|^cbr_|^fc_|^tfm_|^tfz_|^tfh_|^fma_"
 lab = pd.read_csv("data/train_labels.csv", dtype={"id": str}).set_index("id")["label"]
 sub = pd.read_csv("data/sample_submission.csv", dtype={"id": str})
 y = lab.to_numpy()

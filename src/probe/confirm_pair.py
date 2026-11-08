@@ -7,8 +7,13 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 sys.path.insert(0, "probe"); import feats
 K = int(sys.argv[1]); tag = sys.argv[2]; fam = sys.argv[3] if len(sys.argv) > 3 else "semiauto_bag6w"; NS = 3; t0 = time.time()
-X, Xt = feats.frame(feats.lab.index, "train", feats.FAMS[:-1] + [fam]), feats.frame(feats.sub["id"], "test", feats.FAMS[:-1] + [fam])
+X, Xt = feats.frame(feats.lab.index, "train", feats.FAMS[:-1] + fam.split(",")), feats.frame(feats.sub["id"], "test", feats.FAMS[:-1] + fam.split(","))
 X = X.loc[:, ~X.columns.duplicated()]; Xt = Xt[X.columns]; y = feats.y
+if os.environ.get("SIDEROOT"):   # side-by-side: append the same feature set computed on the time-reversed series
+    _cwd = os.getcwd(); os.chdir(os.environ["SIDEROOT"]); fl = feats.FAMS[:-1] + fam.split(",")
+    XR_ = feats.frame(feats.lab.index, "train", fl).loc[:, lambda d: ~d.columns.duplicated()][X.columns]; XTR_ = feats.frame(feats.sub["id"], "test", fl).loc[:, lambda d: ~d.columns.duplicated()][X.columns]
+    os.chdir(_cwd); XR_.columns = XTR_.columns = [c + "_rv" for c in X.columns]
+    X = pd.concat([X, XR_], axis=1); Xt = pd.concat([Xt, XTR_], axis=1)
 Xn, XT = X.to_numpy(np.float32), Xt.to_numpy(np.float32); ALL = np.vstack([Xn, XT]); ALL = np.where(np.isnan(ALL), np.nanmedian(ALL, 0), ALL)
 J = int(os.environ.get("J", 64)); Q = dict(objective="binary", learning_rate=0.1, num_leaves=31, min_child_samples=40, subsample=0.8, subsample_freq=1, colsample_bytree=0.5, reg_lambda=1.0, n_estimators=2000, verbose=-1, n_jobs=J)
 P = {**Q, "learning_rate": 0.02, "n_estimators": 5000, "num_leaves": int(os.environ.get("NL", 31)), "min_child_samples": int(os.environ.get("MC", 40)), "reg_lambda": float(os.environ.get("RL", 1.0))}; pairs = list(itertools.combinations(range(K), 2))

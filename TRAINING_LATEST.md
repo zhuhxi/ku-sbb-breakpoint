@@ -1,15 +1,17 @@
-# Latest (post-qualification-freeze) submissions: blendRFS, blendNFS and blendOFS
+# Latest submissions: blendXFS (best, public 0.87791) back to blendNFS
 
-**blendRFS (public 0.87550, OOF 0.8719) is selected on Kaggle as a final submission; its recipe is section 5 below.**
-Sections 1-4 (blendNFS / blendOFS) are its prerequisites.
+**Final Kaggle selections (2026-11-10): blendXFS (public 0.87791, OOF 0.8741) + blendTFS (public 0.87641); their recipe is section 6.**
+Sections 1-5 are its prerequisites (section 5 = blendRFS).
 
 | File | Kaggle submission ID | Public AUC | OOF AUC |
 |---|---|---|---|
-| `submission_blendRFS.csv` | (submitted 2026-11-08 ~22:52 UAE) | **0.87550** (our best public; selected) | **0.8719** (our best OOF) |
+| **`submission_blendXFS.csv`** | (submitted 2026-11-10 ~00:24 UAE) | **0.87791** (best; selected) | **0.8741** |
+| `submission_blendTFS.csv` | (submitted 2026-11-09 ~13:06 UAE) | 0.87641 (selected) | 0.8724 |
+| `submission_blendRFS.csv` | (submitted 2026-11-08 ~22:52 UAE) | 0.87550 | 0.8719 |
 | `submission_blendNFS.csv` | 58123057 | 0.87416 | 0.8706 |
 | `submission_blendOFS.csv` | 58126032 | 0.87356 | 0.8710 |
 
-Both extend the designated GPU route (blendG2 → blendK, see TRAINING_GPU.md and report_final.pdf) with four new ingredients.
+blendNFS and blendOFS extend the designated GPU route (blendG2 → blendK, see TRAINING_GPU.md and report_final.pdf) with four new ingredients.
 All splits are StratifiedKFold(5, shuffle, 42) on whole series; every label-dependent step (feature selection, TabPFN context,
 blend weights, stacker) is fitted inside the training part of a fold. Run from the project root with `PYTHONPATH=.`.
 No competition data, labels or predictions are in this repository.
@@ -156,6 +158,82 @@ The three fine-tuned checkpoints (~480 MB each, trained on synthetic data only) 
 this repository. They are kept by the team on the local workstation (`outputs/arms/`) and archived on the KU HPC storage
 (`/dpc/kuin0094/hongxi/c2ckpt/`), and can be provided to the organisers on request; check them with the SHA-256 sums in 5.2.
 Put them in `outputs/arms/` and run 5.3 → 5.5. Without them, retrain with the lineage in 5.2 (about 1 GPU-hour in total).
+
+## 6. blendTFS → blendWFS → blendXFS (final selections: blendXFS + blendTFS)
+
+| File | Public AUC | OOF AUC (stacker, outer CV seeds 11 / 13) | New ingredient |
+|---|---|---|---|
+| `submission_blendTFS.csv` | 0.87641 (selected) | 0.8724 / 0.8724 (3:1) | realistic generator genR10 → Chronos-2 classifier c2mv_R10 |
+| `submission_blendWFS.csv` | still "Pending" on Kaggle | 0.8732 / 0.8732 (3:1) | genR10 semi-auto bags (bag8r) + 6 pair arms, more R10 / R10b arms |
+| **`submission_blendXFS.csv`** | **0.87791** (selected, best) | **0.8741 / 0.8740 (3:1)** | segment noise classifier (`sn_` features) in 8 TabPFN arms and stacker context |
+
+### 6.1 Generator genR10: fitted for realism, not for score
+From genT (= genS with family shares p_struct [.49,.17,.10,.15,.09,0], `ku_gen_genT.json`) we changed the generator one setting at a
+time and kept a change only if it made the fakes **harder to tell from real series**. The test is a real-vs-fake classifier (C2ST):
+LightGBM on ~34 hand statistics of the pre / post segment and their change (`src/probe/gen_c2st.py`), mean of 3 fake seed sets
+(`c2st3`), lower = more realistic; it was cross-checked with a Chronos-embedding discriminator (`src/probe/gen_disc.py`) and with
+per-statistic KS gaps (`src/probe/gen_ks.py`). No real label is used for any of this (the C2ST compares real and fake series per class).
+genT 0.662 → genR1 (bimodal noise only in WN) 0.649 → genR2 (GARCH and trend only in WN) 0.637 → … → genR5 (more, lighter-tailed
+t noise; drift nuisance) 0.621 → genR6 (isolated spikes) → genR8 (smaller trends) 0.582 → **genR10** (bigger level spikes on random
+walks) **0.580**. All steps are `src/outputs/factory/ku_gen_genR*.json`; new options are in `src/probe/ku_gen.py` (default off, so
+older configs give identical output). genR11 (= genR10, level breaks ×1.1, from break-specific statistics, `src/probe/c2st_brk*.py`)
+made the break statistics more real but did not change the classifier (zero-shot 0.8441 vs 0.8442), so it is not used in any blend.
+
+### 6.2 blendTFS
+1. Fakes: `python src/probe/sim_tensor.py 50000 src/outputs/factory/ku_gen_genR10.json SIMR10/sim_$i.npz $((91000000 + i*50000))`
+   with `REVP=.5`, i = 0..3 (files 2-3 are used only for R10b).
+2. Chronos-2 classifier chain (`src/probe/c2mv_ft.py`, `WIN=512 MT=1`; the R10 / R10b steps use `BLR=5e-6 ACC=4`), each step < 5 min:
+   c2mv_d → c2mv_e, c2mv_f (+genS fakes) → **c2mv_r** (+100k genS fakes, `REVP=.5`, seeds 76.0M; features `c2vr`) →
+   c2mv_t (+100k genT fakes) → **c2mv_R10** (+genR10 files 0-1; zero-shot fwd 0.8428, fwd+rev 0.8442) →
+   **c2mv_R10b** (+genR10 files 2-3; fwd+rev 0.8455). Zero-shot AUC = AUC on the real training set without using its labels.
+3. Features: `python src/probe/c2mv_score.py outputs/arms/c2mv_R10.pt c2vR10` (→ `zsc2vR10{,rev}`, `seqembc2vR10`), same for `c2vr`, `c2vR10b`.
+4. TabPFN arms `EXTRA=seqembc2vR10,timesfm` with (K,TS) = (60,0) (70,2) (55,6) (50,1) (65,3) (80,4), settings as in 5.4, plus full refits.
+5. Stacker (260 arms), `SW=3` = rank(stacker)·3 + rank(blend):
+```
+CB=outputs/factory/seqembmn2.parquet,outputs/factory/seqembc2m.parquet,outputs/factory/seqembc2vr.parquet,outputs/factory/seqembc2vR10.parquet
+XB=outputs/arms/zsgs_oof.npy,outputs/arms/zsc2m_oof.npy,outputs/arms/zsc2mrev_oof.npy,outputs/arms/zsc2vr_oof.npy,outputs/arms/zsc2vrrev_oof.npy,outputs/arms/zsc2vR10_oof.npy,outputs/arms/zsc2vR10rev_oof.npy
+HF_HUB_OFFLINE=1 FULLT=1 ARMS=1 SW=3 XARMS=$XB CTXEXTRA=$CB OUT=outputs/submission_blendTFS.csv python src/probe/stack_tpf_sub.py
+```
+
+### 6.3 blendWFS
+- R10b arms: `EXTRA=seqembc2vR10b,timesfm`, same six (K,TS) bags; CNN `seqpre_mnR9_mt_c64.pt` (= mnr + 1 epoch on 600k genR9 fakes,
+  zero-shot 0.8386) and `seqpre_mnR10_mt_c64.pt` (both in `ckpt/seq/`) → `seqembmnR9`, `seqembmnR10`; arms `EXTRA=seqembmnR10,chronos_2`.
+- Semi-automatic generator-parameter estimates (`src/probe/semiauto_full.py`) trained on 2 extra realism-weighted genR10 bags
+  (seeds 93.0M / 93.1M) and averaged with the 6 old bags: `bag8r = (6·bag6w + 2·r10w2)/8` (quick LightGBM test +0.0074, CI +0.0051..+0.0096,
+  the largest single gain of the last day). Six pair arms rebuilt on it (`src/hpc/pair_any.sbatch`, `src/hpc/gnjbag8r.sbatch`).
+- Stacker: 288 arms, CB and XB as in 6.2 plus `seqembc2vR10b` / `zsc2vR10b{,rev}`; `OUT=outputs/submission_blendWFS.csv`.
+
+### 6.4 blendXFS: segment noise classifier
+Oracle test on genR10 fakes (`src/probe/oracle_nuis.py`): telling LightGBM the true nuisance settings raises AUC 0.8154 → 0.8249,
+and most of the gain is the noise type / degrees of freedom of the pre segment (+0.0070). So we estimate them:
+`src/probe/seg_noise.py` fits AR(5) on the pre segment, whitens the series, computes residual-distribution statistics per segment and
+trains LightGBM on genR10 fakes (pre segments + post segments of series without a shape break) to predict noise type (Gauss / t / bimodal),
+1/df and GARCH; applied to the real pre and post segments (original and reversed series):
+```
+QV=1 BAGS=abef python src/probe/seg_noise.py outputs/factory/segnoise2.parquet          # 19 sn_ columns, ~1 min
+QV=1 BAGS=abef REVSER=1 python src/probe/seg_noise.py REV/outputs/factory/segnoise2.parquet
+```
+On fakes: type accuracy 0.817, 1/df corr 0.735, GARCH accuracy 0.889. Used in 8 TabPFN arms
+(`EXTRA=seqembc2vR10b,seqembmnR9,timesfm,segnoise2`, (K,TS) = (50,1) (60,0) (70,2) (80,4) (65,3) (55,6), best single arms 0.8729; plus two
+`segnoise` arms) and as 5 stacker context columns (`CTXSN=1`: sn_tv, sn_didf, sn_ce, sn_pre_idf, sn_post_idf). 296 arms
+(`manifests/blendXFS_stacker_arms.txt`, per-arm OOF AUC in `manifests/blendXFS_arms_table.csv`):
+```
+CB=outputs/factory/seqembmn2.parquet,outputs/factory/seqembc2m.parquet,outputs/factory/seqembc2vr.parquet,outputs/factory/seqembc2vR10.parquet,outputs/factory/seqembc2vR10b.parquet
+XB=outputs/arms/zsgs_oof.npy,outputs/arms/zsc2m_oof.npy,outputs/arms/zsc2mrev_oof.npy,outputs/arms/zsc2vr_oof.npy,outputs/arms/zsc2vrrev_oof.npy,outputs/arms/zsc2vR10_oof.npy,outputs/arms/zsc2vR10rev_oof.npy,outputs/arms/zsc2vR10b_oof.npy,outputs/arms/zsc2vR10brev_oof.npy
+HF_HUB_OFFLINE=1 CTXSN=1 CTXSNF=outputs/factory/segnoise2.parquet FULLT=1 ARMS=1 SW=3 XARMS=$XB CTXEXTRA=$CB \
+  OUT=outputs/submission_blendXFS.csv python src/probe/stack_tpf_sub.py
+```
+Rank correlation 0.9987 with blendWFS, 0.998 with blendTFS. Kaggle public 0.87791.
+
+### 6.5 Extra Chronos-2 checkpoints (not in git, same storage rule as 5.6)
+```
+3e9e081c01db3479983ebdcc2373b071cbddd69e529b5ed13be5b3a55f52c0c6  c2mv_r.pt
+605ed0083240e49a1a9fe45b69b2cd20ded744325cd421f4a3631b307f8081b8  c2mv_R10.pt
+97fd407d2f5af74249e5ca8c6607f7166e5cb538d2f70e3dd7da7101d97c8350  c2mv_R10b.pt
+```
+Honest notes: the Chronos steps have ±0.004 zero-shot noise between fake chunks (R10b is partly lucky); the stacker settings (SW=3,
+which arms) were chosen on the same OOF table, so its OOF may be slightly optimistic; things that did not help in this phase are in
+`REPORT_CHANGELOG.md` (real labels in Chronos fine-tuning, fakes in TabPFN context, TiRex / TOTO features, another CV split).
 
 ## Hardware and honesty notes
 - GPU: 2 × RTX 4090 (TabPFN, CNN pretraining, Chronos-2, TimesFM); CPU feature pipeline on the KU HPC. The whole test-time

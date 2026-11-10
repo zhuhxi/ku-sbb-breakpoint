@@ -1,0 +1,10 @@
+# Figure: horizontal bar chart, one bar per hidden generator parameter (oracle experiment on synthetic data): AUC gain when the TRUE value of that parameter is given to the model. Sorted largest first (top). Value labels at bar ends with 4 decimals, prefixed '+'.
+Noise type + tail (df): 0.0070
+Volatility clustering (GARCH): 0.0023
+Trend: 0.0016
+Series type: 0.0013
+AR coefficients: 0.0011
+Sine parameters: 0.0011
+x-axis title: AUC gain if known (base 0.8154). Highlight the top bar (noise type) in the accent colour; others in a muted colour.
+
+Output use: a 16:9 presentation slide (projected). Figure text in English. Do not add a figure title inside the plot (the slide title carries the message).

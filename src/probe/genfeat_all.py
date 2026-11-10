@@ -35,11 +35,11 @@ def both(v, n0):
 
 if __name__ == "__main__":
     t0 = time.time()
-    S = pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")]).sort_values(["id", "time"])
+    S = (pd.read_parquet(os.environ["SRC"]) if os.environ.get("SRC") else pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")])).sort_values(["id", "time"])   # SRC: other series (fakes)
     keys, rows = zip(*[(k, (g["value"].to_numpy(dtype=float), int((g["period"] == 0).sum()))) for k, g in S.groupby("id")])
     out = Parallel(n_jobs=args.jobs, batch_size=32)(delayed(both)(v, n0) for v, n0 in rows)
     A = pd.DataFrame([a for a, _ in out], index=keys).astype(float)
     B = pd.DataFrame([b for _, b in out], index=keys).astype(float)
-    A.to_parquet("outputs/factory/genA.parquet")
-    B.to_parquet("outputs/factory/genB.parquet")
+    A.to_parquet(os.environ.get("OUTP", "outputs/factory/") + "genA.parquet")
+    B.to_parquet(os.environ.get("OUTP", "outputs/factory/") + "genB.parquet")
     print(f"genA {A.shape}, genB {B.shape}, missing genA rows {A.isna().all(axis=1).sum()}  ({time.time() - t0:.0f}s)")

@@ -1,22 +1,32 @@
 # KU-SBB (KU Applied AI Challenge 2026) — team **BreakPoint**
 
-Private technical package for qualification (tag `qualification`).
+Private technical package. Tag `qualification` = qualification freeze (2026-11-07); tag `final` = finals freeze (2026-11-10).
 
-## Latest best version (submitted after the qualification freeze, for the organisers' information)
+## Final submissions (finals freeze, tag `final`)
 
-| Kaggle submission ID | File | Public AUC | OOF AUC | Notes |
+Kaggle final selections (changed 2026-11-10, UAE): **`submission_blendXFS.csv` + `submission_blendTFS.csv`**.
+
+| File | Submitted (UAE) | Public AUC | OOF AUC | Notes |
 |---|---|---|---|---|
-| submitted 2026-11-08 ~22:52 UAE | **`submission_blendRFS.csv`** | **0.87550** | **0.8719** | best public and best OOF; **selected on Kaggle**; GPU route |
-| 58123057 | `submission_blendNFS.csv` | 0.87416 | 0.8706 | GPU route |
-| 58126032 | `submission_blendOFS.csv` | 0.87356 | 0.8710 | GPU route |
+| **`submission_blendXFS.csv`** | 2026-11-10 ~00:24 | **0.87791** | **0.8741** | best; selected; + segment noise classifier |
+| **`submission_blendTFS.csv`** | 2026-11-09 ~13:06 | 0.87641 | 0.8724 | selected; realistic generator genR10 → Chronos-2 classifier |
+| `submission_blendWFS.csv` | 2026-11-09 ~18:48 | (Kaggle still "Pending") | 0.8732 | step between TFS and XFS |
+| `submission_blendRFS.csv` | 2026-11-08 ~22:52 | 0.87550 | 0.8719 | previous selection |
+| `submission_blendNFS.csv` (ID 58123057) | 2026-11-08 | 0.87416 | 0.8706 | |
+| `submission_blendOFS.csv` (ID 58126032) | 2026-11-08 | 0.87356 | 0.8710 | |
 
-New since blendG2: CNN pretrained on synthetic series whose break class also contains transient nuisances (zero-shot AUC 0.83 without
-real labels), forecast-error features from the public Chronos-2 and TimesFM-2.5 foundation models, four new TabPFN groups, full-training-set
-TabPFN refits for test predictions, and a TabPFN stacker; blendRFS adds the public Chronos-2 model fine-tuned on our synthetic
-series as a break classifier (zero-shot AUC 0.84 without real labels) and three TabPFN groups on its embeddings.
-**How to reproduce blendRFS: `TRAINING_LATEST.md`, section 5** (sections 1-4 are its prerequisites); checkpoints of the pretrained CNNs: `ckpt/seq/`;
-stacker inputs: `manifests/`; updated 3-page report: **`report_final.pdf`** (`REPORT_CHANGELOG.md`).
-The designated qualification submission below is unchanged.
+Idea in one line: **rebuild how the data was made, then learn from synthetic data.** We fitted the synthetic generator for realism
+(real-vs-fake classifier AUC 0.66 → 0.58, no labels used), fine-tuned the public Chronos-2 model on its series as a break detector
+(zero-shot AUC 0.845 on the real training set without its labels), and fed these label-free detectors, a fake-trained segment
+noise classifier and our feature pipeline into TabPFN arms and a TabPFN stacker.
+
+- **How to reproduce blendXFS / blendTFS: `TRAINING_LATEST.md`, section 6** (sections 1-5 are prerequisites).
+- Change log of the finals phase: **`CHANGELOG_FINAL.md`**; report change log: `REPORT_CHANGELOG.md`.
+- Slides for the final talk: `slides/BreakPoint_final.pptx` / `.pdf`; Q&A notes `slides/QA_prep.md`; figure scripts `slides/figures/`.
+- Pretrained CNN checkpoints: `ckpt/seq/`; stacker arm lists: `manifests/`. The fine-tuned Chronos-2 checkpoints (~486 MB each)
+  are too large for git; SHA-256 sums in `TRAINING_LATEST.md` 5.2 / 6.5, files available from the team on request.
+- Test-time inference of these blends needs one ≥ 16 GB GPU (TabPFN, Chronos-2). The CPU-auditable, bit-exact reference stays
+  `submission_blendD_r12.csv` (`predict.py`, `VERIFY.md`).
 
 ## Designated qualification submission
 
@@ -33,8 +43,7 @@ The designated qualification submission below is unchanged.
 **CPU-auditable fallback:** `submission_blendD_r12.csv` (submission ID 58097903), public 0.86076, OOF 0.8606 —
 `predict.py` + `ckpt/` reproduce it bit-for-bit in 31 s on 2 CPU cores (`VERIFY.md`).
 
-Kaggle final selections (changed 2026-11-08 ~23:30 UAE): **`submission_blendRFS.csv` + `submission_blendG2.csv`**.
-`submission_blendD_r12.csv` is no longer selected but stays the CPU-auditable, bit-exact reference (`predict.py`, `VERIFY.md`).
+Kaggle selections were later changed (2026-11-08: blendRFS + blendG2; 2026-11-10: blendXFS + blendTFS, see above).
 
 Other submissions referred to in the report:
 
@@ -47,7 +56,8 @@ Other submissions referred to in the report:
 
 ## Repository layout
 
-- `report_final.pdf` / `report_final.html` — updated 3-page report (best version, ablations); `TRAINING_LATEST.md` — recipe for blendNFS / blendOFS.
+- `report_final.pdf` / `report_final.html` — updated 3-page report (best version, ablations); `TRAINING_LATEST.md` — recipe for blendNFS … blendXFS (section 6 = final selections).
+- `slides/` — final talk deck, Q&A notes and figure scripts; `CHANGELOG_FINAL.md` — finals-phase change log.
 - `report.pdf` / `report.html` — 3-page qualification report (frozen at the qualification tag) (method, validation, error analysis, limitations, sources, AI use).
 - `predict.py` — CPU inference for the designated submission from the frozen checkpoints.
 - `ckpt/` — frozen checkpoints: 11 pair-interaction arms × 5 folds × 3 seeds (LightGBM text models, gzip) + per-fold selected columns; interaction arm `inter_gnjt162_ck` × 5 folds × 2 seeds (selected pool columns, fill values, kept interaction list, LightGBM models).

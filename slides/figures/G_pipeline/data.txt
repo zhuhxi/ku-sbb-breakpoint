@@ -1,0 +1,32 @@
+# Figure: method overview of the KU-SBB structural-break solution, drawn as a 3-column pipeline schematic (like an architecture overview).
+# Goal for a slide: one glance shows the flow and the key idea. Keep text per node to 2-6 words. The MIDDLE column is the key idea and should carry the accent colour (the reference's highlighted model box).
+
+## Column 1 title: "Real series -> features"
+- glyph: one series (values below), vertical dashed line at the known boundary n0; before n0 in blue, after n0 in red.
+- arrow down to a box: "Statistical break tests" with two small sub-items: "two-sample tests (before vs after)", "likelihood-ratio tests on AR residuals"
+- small note beside the arrow: "+ same on time-reversed series"
+- output row of small token boxes (like feature tokens): "hundreds of features"
+
+## Column 2 title: "Generator -> label-free detectors"   (key idea; accent)
+- box: "Synthetic-data generator" (fitted to real series; realism AUC 0.58)
+- arrow down: "unlimited labelled series, all hidden parameters known"
+- box (model-style, accent): "Trained on synthetic data only" containing three items:
+    "CNN + fine-tuned Chronos-2 (zero-shot AUC 0.84 / 0.85)"
+    "Estimators: series type, break kind and size"
+    "Noise classifier per segment"
+- arrow down: "applied to real series -> extra feature columns"
+- caption under column: "no real labels used"
+
+## Column 3 title: "Ensemble -> prediction"
+- stacked token boxes: "TabPFN / LightGBM arms" with a count "x 296" (best single arm 0.873)
+- arrow down to a model box: "TabPFN stacker (out-of-fold scores)"
+- arrow down: "3 x stacker rank + 1 x blend rank"
+- final output: P(break) per series, with the headline numbers: "OOF AUC 0.8741", "Public AUC 0.8779"
+
+## Flow between columns
+- Column 1 output and column 2 output both feed column 3 (arrows or connectors across the vertical dividers are allowed).
+
+## Series values for the column-1 glyph (every 3rd point of a synthetic series with a level shift; n0 index in this thinned series = 76):
+values=-1.518,0.459,0.765,-0.850,-0.086,2.352,1.123,-0.051,0.345,0.190,-1.612,0.091,0.864,0.089,1.343,-0.857,0.792,0.572,0.510,1.563,1.385,1.716,-0.012,1.143,1.841,-0.472,1.195,-1.958,1.204,-1.050,0.231,2.041,-1.007,1.392,0.475,-0.031,0.167,1.189,-0.197,-0.186,1.242,-0.923,1.233,0.280,-1.090,-0.545,0.346,-1.273,0.864,-2.674,0.363,-0.060,-0.050,-1.063,-0.509,2.116,2.302,1.135,-0.500,-0.163,-0.397,0.729,0.017,0.124,0.314,-0.331,0.462,0.806,-0.242,-1.560,0.495,0.833,0.141,0.227,0.424,0.812,-1.190,0.036,-1.359,-1.536,0.399,-1.742,0.067,-1.159,-0.232,-0.681,0.735,-1.223,-0.457,-0.703,-0.817,2.166,-1.383,-0.618,-0.888,-1.016,-0.838,-0.278,1.321,0.228,-0.285,-1.576,-0.770,-2.172,-2.191,-1.329,-0.992,-0.084,-0.322,-1.208,1.054,-1.355,-0.029,-1.993,-1.375,-2.657,-0.893,-0.461,-0.581,-0.482,-0.310,-0.241,1.034,0.752,0.103,-0.019,-1.090,-1.300,-1.586,0.656,-1.727,-0.320,-1.457,-0.058,-0.477,-1.331,-0.382,0.864,-1.812,0.496,-0.772,-1.442,0.858,-0.285,0.514,-0.030,-0.039,-1.342,-2.217,0.448,-0.939,0.950,1.369,-0.043,-0.300,-0.774,-1.000,1.239,-0.900,-1.383,-1.476,0.332,0.121,-0.045,-1.313,-0.859,-1.895,-0.953,0.155,-0.978,-0.054,0.462,-0.117,-0.003,-0.152,0.292,-1.055,-0.246,-0.598,-0.085,-0.394,1.443,0.440,-1.495,-1.714,-2.223,1.201,-1.942,-1.964,1.380,-0.979,-0.832,1.172,-0.226,0.422,-1.207,0.132,-2.941,-1.242,-1.010,0.266,0.685,1.202,-0.772
+
+Output use: a 16:9 presentation slide (projected). English text. No figure title (the slide title carries the message). Text must be readable on a projector: prefer fewer, larger words.

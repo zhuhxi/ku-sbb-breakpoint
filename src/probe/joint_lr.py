@@ -7,6 +7,7 @@ g_jlr = loglik(alt) - loglik(null); g_jlr0 = the same with no trend / ramp in ei
 
     python probe/joint_lr.py     # all train + test -> outputs/factory/gjlr.parquet
 """
+import os
 import time
 
 import numpy as np
@@ -45,9 +46,9 @@ def one(v, n0):
 
 if __name__ == "__main__":
     t0 = time.time()
-    S = pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")]).sort_values(["id", "time"])
+    S = (pd.read_parquet(os.environ["SRC"]) if os.environ.get("SRC") else pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")])).sort_values(["id", "time"])   # SRC: other series (fakes)
     items = [(k, g["value"].to_numpy(np.float64), int((g["period"] == 0).sum())) for k, g in S.groupby("id", sort=False)]
     rows = Parallel(n_jobs=30, batch_size=64)(delayed(one)(v, n0) for _, v, n0 in items)
     G = pd.DataFrame(rows, index=[k for k, _, _ in items]).astype(float)
-    G.to_parquet("outputs/factory/gjlr.parquet")
+    G.to_parquet(os.environ.get("OUTP", "outputs/factory/") + "gjlr.parquet")
     print(f"{len(G)} series in {time.time() - t0:.1f}s\n{G.describe().round(3)}")

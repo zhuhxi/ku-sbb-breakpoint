@@ -8,6 +8,7 @@ different families; g_noise_b / g_noise_a = family index per side.
     python probe/noise_lr.py --jobs 64     # all train + test series -> outputs/factory/gnoise.parquet
 """
 import argparse
+import os
 import importlib.util
 import sys
 import time
@@ -53,12 +54,12 @@ def one(v, n0):
 
 if __name__ == "__main__":
     t0 = time.time()
-    S = pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")]).sort_values(["id", "time"])
+    S = (pd.read_parquet(os.environ["SRC"]) if os.environ.get("SRC") else pd.concat([pd.read_parquet(f"data/{p}_series.parquet") for p in ("train", "test")])).sort_values(["id", "time"])   # SRC: other series (fakes)
     items = [(k, g["value"].to_numpy(np.float64), int((g["period"] == 0).sum())) for k, g in S.groupby("id", sort=False)]
     if args.n:
         items = items[: args.n]
     rows = Parallel(n_jobs=args.jobs, batch_size=16)(delayed(one)(v, n0) for _, v, n0 in items)
     G = pd.DataFrame(rows, index=[k for k, _, _ in items]).astype(float)
     if not args.n:
-        G.to_parquet("outputs/factory/gnoise.parquet")
+        G.to_parquet(os.environ.get("OUTP", "outputs/factory/") + "gnoise.parquet")
     print(f"{len(G)} series in {time.time() - t0:.1f}s\n{G.describe().round(3)}")

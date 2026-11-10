@@ -22,6 +22,8 @@ if os.environ.get("CTXEXTRA"):
     for f in os.environ["CTXEXTRA"].split(","):
         E_ = pd.read_parquet(f).reindex(L.id); C = np.column_stack([C, E_[[c for c in E_ if "logit" in c or "aux" in c]].to_numpy(np.float32)])
     print("ctx cols", C.shape[1], flush=True)
+if os.environ.get("CTXSN"):   # segment-noise summary columns in the stacker context
+    E_ = pd.read_parquet(os.environ.get("CTXSNF", "outputs/factory/segnoise.parquet")).reindex(L.id); C = np.column_stack([C, E_[[c for c in E_ if c.startswith("sn_")] if os.environ["CTXSN"] == "all" else ["sn_tv", "sn_didf", "sn_ce", "sn_pre_idf", "sn_post_idf"]].to_numpy(np.float32)]); print("ctx + sn", C.shape[1], flush=True)
 Z = logit(np.clip(np.column_stack(list(G.values())), 1e-4, 1 - 1e-4)); Zk = logit(np.clip(K, 1e-4, 1 - 1e-4))[:, None]
 cv = list(StratifiedKFold(5, shuffle=True, random_state=int(os.environ.get("OSEED", 11))).split(y, y)); rng = np.random.default_rng(0); B = [rng.integers(0, len(y), len(y)) for _ in range(300)]
 print(f"blendK {roc_auc_score(y, K):.4f} oseed {os.environ.get('OSEED', 11)} fold0 size {len(cv[0][1])} first {cv[0][1][:3]}", flush=True)
@@ -39,6 +41,12 @@ for nm in os.environ.get("VARS", "ctx").split(","):
     o = np.zeros(len(y))
     for tr, va in cv:
         for sd in range(int(os.environ.get("NSEED", 1))): o[va] += rankdata(TabPFNClassifier(device="cuda", n_estimators=NE, ignore_pretraining_limits=True, random_state=sd).fit(X[tr], y[tr]).predict_proba(X[va])[:, 1])
+        PQ = float(os.environ.get("PSEUDO", 0))
+        if PQ:   # transductive: add the most confident held-out rows with pseudo-labels, refit, re-predict
+            q = rankdata(o[va]) / len(va); sel = (q > 1 - PQ) | (q < PQ)
+            X2 = np.vstack([X[tr], X[va][sel]]); y2 = np.r_[y[tr], (q[sel] > .5).astype(int)]
+            o[va] = rankdata(TabPFNClassifier(device="cuda", n_estimators=NE, ignore_pretraining_limits=True, random_state=0).fit(X2, y2).predict_proba(X[va])[:, 1])
+    if os.environ.get("SAVEOOF"): np.save(os.environ["SAVEOOF"], 3 * r(o) + K)   # 3:1 blend OOF for error analysis
     for nm2, s in ((nm, o), (nm + " avgK", r(o) + K), (nm + " 2:1", 2 * r(o) + K), (nm + " 3:1", 3 * r(o) + K)):
         d = [roc_auc_score(y[i], s[i]) - roc_auc_score(y[i], K[i]) for i in B]
         print(f"{nm2:22s} {roc_auc_score(y, s):.4f} CI [{np.percentile(d,2.5):+.4f},{np.percentile(d,97.5):+.4f}] folds {sum(roc_auc_score(y[va], s[va]) > roc_auc_score(y[va], K[va]) for _, va in cv)}/5", flush=True)

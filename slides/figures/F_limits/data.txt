@@ -1,0 +1,16 @@
+# Figure: two side-by-side horizontal ranked bar charts of out-of-fold AUC (final model, real training series), value labels at bar ends (3 decimals), sorted best on top.
+Left panel 'By series type' (x title: AUC):
+Sine 0.911
+AR(2) 0.885
+White noise 0.874
+AR(1) 0.869
+Random walk 0.709
+Right panel 'By series length' (x title: AUC):
+Longest 20% 0.911
+4th quintile 0.894
+3rd quintile 0.880
+2nd quintile 0.847
+Shortest 20% 0.821
+Colour: hard groups (Random walk, Shortest 20%) in the accent colour; the rest in one muted colour. Legend: 'Hard cases' vs 'Others'. x axis from 0.5 to 1.0.
+
+Output use: a 16:9 presentation slide (projected). Figure text in English. Do not add a figure title inside the plot (the slide title carries the message).

@@ -58,7 +58,8 @@ cb = [lgb.early_stopping(40, verbose=False)]
 for name, y in T.items():
     if name in ("kind", "family", "ntype"):
         m = lgb.LGBMClassifier(objective="multiclass", **base).fit(XS[tr], y[tr], **fw(), eval_set=[(XS[va], y[va])], callbacks=cb)
-        pr = m.predict_proba(XR); labs = KINDS if name == "kind" else FAMI if name == "family" else ["gauss", "t", "bimodal"]
+        labs = KINDS if name == "kind" else FAMI if name == "family" else ["gauss", "t", "bimodal"]
+        pr = np.zeros((len(XR), len(labs))); pr[:, m.classes_.astype(int)] = m.predict_proba(XR)   # a class absent from the fakes (e.g. LL share 0) -> 0
         for i, l in enumerate(labs): out[f"saf_{name}_{l}"] = pr[:, i]
         print(f"  {name:10s} val accuracy {(m.predict_proba(XS[va]).argmax(1) == y[va]).mean():.3f}  trees {m.best_iteration_}  {time.time() - t0:.0f}s", flush=True)
     elif y.dtype.kind == "i":

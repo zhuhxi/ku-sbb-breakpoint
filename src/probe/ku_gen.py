@@ -56,17 +56,20 @@ def noise(r, n, P):
         elif ty == 0:
             z = r.standard_normal(n)
         else:
-            e = r.choice([-1, 1], n) * r.uniform(1.0, 2.5) + r.standard_normal(n)
+            e = r.choice([-1, 1], n) * r.uniform(*P.get("bim_m", (1.0, 2.5))) + r.standard_normal(n)
             return e / e.std()
         return garchify(r, z, P)
     u = r.random()
     _LAST.update(ntype=0, ndf=0.0, garch=0)
     if u < P["p_bimodal"]:
         _LAST["ntype"] = 2
-        e = r.choice([-1, 1], n) * r.uniform(1.0, 2.5) + r.standard_normal(n)
+        e = r.choice([-1, 1], n) * r.uniform(*P.get("bim_m", (1.0, 2.5))) + r.standard_normal(n)
         return e / e.std()
     if u < P["p_bimodal"] + (1 - P["p_bimodal"]) * P["p_t"]:
-        df = r.uniform(*P["t_df"]); _LAST.update(ntype=1, ndf=df)
+        df = r.uniform(*P["t_df"])
+        if P.get("t_heavy_p", 0) and r.random() < P["t_heavy_p"]:   # a small share of very heavy tails (real WN kurtosis q99 ~10)
+            df = r.uniform(*P.get("t_heavy_df", (2.5, 4.0)))
+        _LAST.update(ntype=1, ndf=df)
         z = r.standard_t(df, n) / np.sqrt(df / (df - 2))
     else:
         z = r.standard_normal(n)
@@ -117,19 +120,30 @@ def gen(P, seed, brk):
     b0 = n0 + BU                                       # boundary inside the burned-in array
     t = np.arange(n)
     fam = ["WN", "AR1", "AR2", "SIN", "RW", "LL"][r.choice(6, p=np.asarray(P["p_struct"]) / np.sum(P["p_struct"]))]
+    if P.get("bim_fams") == "WN":                     # bimodal noise only in white-noise series (real data: ~8.6% of WN, ~0 elsewhere)
+        P = dict(P, p_bimodal=P.get("p_bim_wn", .09) if fam == "WN" else 0.0)
+    if P.get("garch_fams") == "WN":                   # volatility clustering only in white-noise series (real: WN .026, others ~.003)
+        P = dict(P, garch_p=P.get("garch_p_wn", .3) if fam == "WN" else 0.0)
+    if fam == "RW" and P.get("rw_t_df"):              # random-walk increments with their own (heavier) t tails
+        P = dict(P, p_t=P.get("rw_p_t", 1.0), t_df=P["rw_t_df"])
     e = noise(r, N, P)
     nz = dict(_LAST)
-    kind = r.choice(["spread", "level", "dep", "shape"], p=np.asarray(P["p_kind"]) / np.sum(P["p_kind"])) if brk else None
+    pk = np.asarray(P["p_kind"], float)
+    if P.get("dep_fams") == "AR":                      # dependence breaks only in AR series (real: none visible in WN / RW)
+        pk = np.asarray(P.get("p_kind_ar", P["p_kind"]), float) if fam in ("AR1", "AR2") else pk * np.array([1, 1, 0, 1])
+    kind = r.choice(["spread", "level", "dep", "shape"], p=pk / pk.sum()) if brk else None
     kind2 = None
     if brk and r.random() < P.get("couple_p", 0):       # a second, different change at the same boundary
         kind2 = r.choice([k for k in ("spread", "level", "dep", "shape") if k != kind])
     kinds = {kind, kind2}
+    if "spread" in kinds and P.get("spread_shape_p", 0) and r.random() < P["spread_shape_p"]: kinds.add("shape")   # spread break with a fresh noise draw (real: noise type often changes too)
     hid = dict(ntype=nz.get("ntype", 0), inv_df=1 / nz["ndf"] if nz.get("ndf") else 0.0, garch=nz.get("garch", 0), sin_amp=0.0, sin_per=0, p1=0.0, p2=0.0, dep_d=0.0, log_k=0.0, lvl_d=0.0, lvl_mode=0, shape=0, decoy=0, vburst=0, drift=0, trend=0)
     if brk and P.get("kind_mode") == "switch":         # every change switched on independently (at least the main one)
         kinds |= {k for k, q in zip(("spread", "level", "dep", "shape"), P["p_kind"]) if r.random() < P.get("switch_k", .3) * q}
     if "shape" in kinds:
         hid["shape"] = 1
         sm = P.get("shape_mode", "redraw")
+        if P.get("shape_heavy_p", 0) and r.random() < P["shape_heavy_p"]: sm = "heavy"   # real breaks raise kurtosis more often than they lower it
         if sm == "heavy":                                # tails get heavier after the boundary
             df = r.uniform(3, 5); e[b0:] = r.standard_t(df, N - b0) / np.sqrt(df / (df - 2))
         elif sm == "flip":                               # Gaussian <-> t: the family is forced to change
@@ -146,6 +160,8 @@ def gen(P, seed, brk):
     if fam in ("AR1", "AR2"):
         if fam == "AR1":
             p1 = float(np.clip(r.choice(catalog()["phi"]), -.95, .95)) if P.get("cat_phi") else r.uniform(*P["ar1"])
+            if P.get("ar1_neg_p") and r.random() < P["ar1_neg_p"]:   # extra mass of clearly negative AR(1)
+                p1 = r.uniform(*P.get("ar1_neg", (-.75, -.35)))
         elif fam == "AR2":
             while True:
                 p1, p2 = r.uniform(-P["ar2_p1"], P["ar2_p1"]), r.uniform(-P["ar2_p2"], P["ar2_p2"])
@@ -171,7 +187,10 @@ def gen(P, seed, brk):
     e_sd = e[BU:b0].std()
     if "spread" in kinds:
         k = csize(r, P, P["spread_cs"], "ln_sig_spr") if P.get("size_mode") else np.log(2) if r.random() < P["spread_ln2"] else r.uniform(*P["spread_small"])
-        kout = np.exp(sgn(r) * k)
+        k = k * P.get("spread_fk", {}).get(fam, 1.0)   # per-family spread size multiplier (default 1 = unchanged)
+        sg = (1.0 if r.random() < P["spread_up_p"] else -1.0) if P.get("spread_up_p") else sgn(r)   # real: increases a bit more common
+        if sg < 0: k = k * P.get("spread_down", 1.0)     # real data: spread decreases are weaker than increases
+        kout = np.exp(sg * k)
         hid["log_k"] = float(np.log(kout))
         if P.get("spread_target", "noise") == "noise":
             z[n0:] *= kout                              # on the output of the noise process
@@ -183,12 +202,14 @@ def gen(P, seed, brk):
             z = zz[BU:]
     if fam == "SIN":
         amp = r.choice(catalog()["sin"]) * z.std() if P.get("cat_sin") else r.uniform(*P["sin_amp"])
-        per = r.integers(12, 33); hid["sin_amp"], hid["sin_per"] = float(amp), int(per)
+        per = r.uniform(12, 33) if P.get("sin_per_cont") else r.integers(12, 33); hid["sin_amp"], hid["sin_per"] = float(amp), float(per)
         ph0 = r.uniform(0, 6.3); A_ = np.full(n, amp)
         if brk and P.get("sin_brk_p", 0) and r.random() < P["sin_brk_p"]:   # the break also changes the sine amplitude
             A_[n0:] = amp * np.exp(sgn(r) * r.uniform(*P.get("sin_brk_k", (.3, .8))))
         x = (z + A_ * np.sin(2 * np.pi * t / per + ph0)) * P["sin_scale"]
     elif fam == "RW":
+        if P.get("rw_ar"):                             # weakly autocorrelated increments (ARIMA(1,1,0))
+            z = lfilter([1], [1, -r.uniform(-P["rw_ar"], P["rw_ar"])], z)
         x = np.cumsum(z)
     elif fam == "LL":
         if P.get("ll_mode") == "arma":                  # ARMA(1,1) near a unit root instead of level walk + noise
@@ -231,7 +252,8 @@ def gen(P, seed, brk):
         if fam == "RW" and P.get("rw_drift"):          # RW level break as a DRIFT change: slope d / rw_drift per point after n0
             step = np.zeros(n); step[n0:] = d * np.arange(1, n - n0 + 1) / P["rw_drift"]; hid["lvl_mode"] = 3
         x = x + step
-    if (fam in ("WN", "AR1", "AR2") or P.get("trend_fams") == "all") and r.random() < P["trend_p"]:
+    TFAM = {"all": ("WN", "AR1", "AR2", "SIN", "RW", "LL"), "WN": ("WN",)}.get(P.get("trend_fams"), ("WN", "AR1", "AR2"))
+    if fam in TFAM and r.random() < P["trend_p"]:
         x = x + sgn(r) * r.uniform(*P["trend"]) * x.std() * t / n
         hid["trend"] = 1
     if not brk and P.get("pre_shift_p", 0) and r.random() < P["pre_shift_p"]:   # no-break series with a lasting change INSIDE the pre segment (not at n0)
@@ -259,10 +281,19 @@ def gen(P, seed, brk):
     if brk and P.get("shock_p", 0) and r.random() < P["shock_p"]:        # transient post-break shock: extra noise decaying from the boundary
         L = n - n0; j = np.arange(L)
         x[n0:] += r.uniform(*P.get("shock_a", (.5, 1.5))) * e_sd * np.exp(-j / r.uniform(*P.get("shock_tau", (3, 15)))) * r.standard_normal(L)
-    if r.random() < P.get("spike_p", 0):                # isolated shocks anywhere (spike bank idea)
+    if fam == "RW" and P.get("rw_jump_p", 0) and r.random() < P["rw_jump_p"]:   # random walk: rare big increments (permanent steps)
+        sdn = np.std(np.diff(x))
+        for j in r.integers(1, n - 1, int(r.integers(1, P.get("rw_jump_nmax", 2) + 1))):
+            x[j:] += sgn(r) * r.uniform(*P.get("rw_jump_size", (6, 12))) * sdn
+    if r.random() < (P.get("spike_p_rw", P.get("spike_p", 0)) if fam == "RW" else P.get("spike_p", 0)) and fam in P.get("spike_fams", ("WN", "AR1", "AR2", "SIN", "RW", "LL")):   # isolated shocks anywhere
         sdn = np.std(np.diff(x)) / np.sqrt(2)
-        for j in r.integers(1, n - 1, int(r.integers(1, 4))):
-            x[j] += sgn(r) * r.uniform(*P.get("spike_size", (5, 10))) * sdn
+        m_ = int(r.integers(1, P.get("spike_nmax", 3) + 1))
+        js = r.integers(n0, n - 1, m_) if P.get("spike_post", 0) and r.random() < P["spike_post"] else r.integers(1, n - 1, m_)   # spike_post: share placed after the boundary
+        for j in js:
+            if fam == "RW" and P.get("spike_rw_step"):    # in a random walk the shock hits the increment: a permanent step
+                x[j:] += sgn(r) * r.uniform(*P.get("spike_size", (5, 10))) * sdn * np.sqrt(2)
+            else:
+                x[j] += sgn(r) * r.uniform(*P.get("spike_size", (5, 10))) * sdn * (P.get("spike_rw_mult", 1.0) if fam == "RW" else 1.0)
     if not brk and fam in ("WN", "AR1", "AR2") and r.random() < P.get("excursion_p", 0):   # hard negative: slow wander
         x = x + np.cumsum(r.standard_normal(n)) * r.uniform(*P.get("excursion_sd", (.03, .08))) * x.std()
     x = r.uniform(-2, 2) + 2 ** r.uniform(-1, 1) * x

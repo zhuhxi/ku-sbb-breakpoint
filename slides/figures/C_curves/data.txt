@@ -1,0 +1,7 @@
+# Figure: line chart with circle markers, two series over 8 successive submissions (discrete x axis, in order).
+x labels: D, G2, K, N, O, R, T, X   (x-axis title: Submission version)
+Out-of-fold AUC (5-fold, 24,000 series): 0.8606, 0.8657, 0.8684, 0.8706, 0.8710, 0.8719, 0.8724, 0.8741
+Public leaderboard AUC (~1,520 series): 0.86076, 0.86386, 0.86971, 0.87416, 0.87356, 0.87550, 0.87641, 0.87791
+y-axis title: AUC. Message: both rise together, so gains were not leaderboard overfitting. Label the final values (0.8741, 0.8779).
+
+Output use: a 16:9 presentation slide (projected). Figure text in English. Do not add a figure title inside the plot (the slide title carries the message).

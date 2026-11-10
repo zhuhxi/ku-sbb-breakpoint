@@ -12,6 +12,7 @@ def run(T):
 sf, ef, af = run(np.concatenate([np.load("outputs/arms/seq_train.npy"), np.load("outputs/arms/seq_test.npy")]))
 sr, er, ar = run(np.concatenate([np.load("outputs/arms/seq_train_rev.npy"), np.load("outputs/arms/seq_test_rev.npy")]))
 np.save(f"outputs/arms/zs{TAG}_oof.npy", sf[:24000]); np.save(f"outputs/arms/zs{TAG}_test.npy", sf[24000:]); np.save(f"outputs/arms/zs{TAG}rev_oof.npy", sr[:24000]); np.save(f"outputs/arms/zs{TAG}rev_test.npy", sr[24000:])
+if os.environ.get("EMBOUT"): np.save(os.environ["EMBOUT"], ef.astype(np.float16)); np.save(os.environ["EMBOUT"].replace(".npy", "_rev.npy"), er.astype(np.float16))
 mu, sd = ef.mean(0), ef.std(0) + 1e-6; pca = PCA(32, random_state=0).fit((ef - mu) / sd)
 ids = list(pd.read_csv("data/train_labels.csv", dtype={"id": str}).id) + list(pd.read_csv("data/sample_submission.csv", dtype={"id": str}).id)
 for E, s, AXv, out in ((ef, sf, af, f"outputs/factory/seqemb{TAG}.parquet"), (er, sr, ar, os.environ.get("REV", "/mnt/disk2/zhuhx/kagglecompetition/ku_sbb_rev") + f"/outputs/factory/seqemb{TAG}.parquet")):

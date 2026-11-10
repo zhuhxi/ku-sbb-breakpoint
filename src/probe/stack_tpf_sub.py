@@ -26,6 +26,8 @@ def ctx(ids, part):
     C0 = np.column_stack([np.log(n), n0 / n] + [A[c].to_numpy() for c in A if c.startswith("saf_family_")] + [A["saf_kind_None"].to_numpy(), A["saf_ntype_t"].to_numpy(), mb["mb_rescaled"].fillna(0).to_numpy()])
     for f in [f for f in os.environ.get("CTXEXTRA", "").split(",") if f]:
         E_ = pd.read_parquet(f).reindex(ids); C0 = np.column_stack([C0, E_[[c for c in E_ if "logit" in c or "aux" in c]].to_numpy(np.float32)])
+    if os.environ.get("CTXSN"):   # same segment-noise context columns as stack_tpf.py
+        E_ = pd.read_parquet(os.environ.get("CTXSNF", "outputs/factory/segnoise.parquet")).reindex(ids); C0 = np.column_stack([C0, E_[[c for c in E_ if c.startswith("sn_")] if os.environ["CTXSN"] == "all" else ["sn_tv", "sn_didf", "sn_ce", "sn_pre_idf", "sn_post_idf"]].to_numpy(np.float32)])
     return C0
 K = {p: r(sum(W[k] * GG[p][k] for k in W)) for p in GG}
 print("blendK OOF", round(roc_auc_score(y, K["oof"]), 4), "| test corr with submitted blendK", np.corrcoef(K["test"], pd.read_csv("outputs/submission_blendK.csv").break_probability)[0, 1])

@@ -4,14 +4,14 @@ Private technical package. Tag `qualification` = qualification freeze (2026-11-0
 
 ## Final submissions (finals freeze, tag `final`)
 
-Kaggle final selections (changed 2026-11-10, UAE): **`submission_blendXFS.csv` + `submission_blendTFS.csv`**.
+Kaggle final selections (changed 2026-11-10, UAE): **`submission_blendXFS.csv` (ID 58174578) + `submission_blendTFS.csv` (ID 58158556)**. Team BreakPoint.
 
 | File | Submitted (UAE) | Public AUC | OOF AUC | Notes |
 |---|---|---|---|---|
-| **`submission_blendXFS.csv`** | 2026-11-10 ~00:24 | **0.87791** | **0.8741** | best; selected; + segment noise classifier |
-| **`submission_blendTFS.csv`** | 2026-11-09 ~13:06 | 0.87641 | 0.8724 | selected; realistic generator genR10 → Chronos-2 classifier |
-| `submission_blendWFS.csv` | 2026-11-09 ~18:48 | (Kaggle still "Pending") | 0.8732 | step between TFS and XFS |
-| `submission_blendRFS.csv` | 2026-11-08 ~22:52 | 0.87550 | 0.8719 | previous selection |
+| **`submission_blendXFS.csv`** (ID **58174578**) | 2026-11-10 ~00:24 | **0.87791** | **0.8741** | best; selected; + segment noise classifier |
+| **`submission_blendTFS.csv`** (ID **58158556**) | 2026-11-09 ~13:06 | 0.87641 | 0.8724 | selected; realistic generator genR10 → Chronos-2 classifier |
+| `submission_blendWFS.csv` | 2026-11-09 ~18:48 | (Kaggle scoring "Error") | 0.8732 | step between TFS and XFS |
+| `submission_blendRFS.csv` (ID 58138276) | 2026-11-08 ~22:52 | 0.87550 | 0.8719 | previous selection |
 | `submission_blendNFS.csv` (ID 58123057) | 2026-11-08 | 0.87416 | 0.8706 | |
 | `submission_blendOFS.csv` (ID 58126032) | 2026-11-08 | 0.87356 | 0.8710 | |
 

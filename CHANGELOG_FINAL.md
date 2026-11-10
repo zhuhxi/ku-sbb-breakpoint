@@ -12,9 +12,9 @@ Full day-by-day notes with every negative result are kept by the team (LESSONS.m
 | 11-08 07:46 | blendK | 0.86971 | 0.8684 | unchanged |
 | 11-08 | blendNFS / blendOFS | 0.87416 / 0.87356 | 0.8706 / 0.8710 | unchanged |
 | 11-08 22:52 | blendRFS | 0.87550 | 0.8719 | blendRFS + blendG2 (11-08 ~23:30) |
-| 11-09 13:06 | blendTFS | 0.87641 | 0.8724 | unchanged |
-| 11-09 18:48 | blendWFS | still "Pending" on Kaggle | 0.8732 | unchanged |
-| 11-10 00:24 | **blendXFS** | **0.87791** | **0.8741** | **blendXFS + blendTFS (11-10)** |
+| 11-09 13:06 | blendTFS (ID 58158556) | 0.87641 | 0.8724 | unchanged |
+| 11-09 18:48 | blendWFS | Kaggle scoring "Error" (not selected) | 0.8732 | unchanged |
+| 11-10 00:24 | **blendXFS** (ID 58174578) | **0.87791** | **0.8741** | **blendXFS + blendTFS (11-10)** |
 
 ## Method changes
 

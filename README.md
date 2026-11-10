@@ -25,6 +25,9 @@ noise classifier and our feature pipeline into TabPFN arms and a TabPFN stacker.
 - Slides for the final talk: `slides/BreakPoint_final.pptx` / `.pdf`; Q&A notes `slides/QA_prep.md`; figure scripts `slides/figures/`.
 - Pretrained CNN checkpoints: `ckpt/seq/`; stacker arm lists: `manifests/`. The fine-tuned Chronos-2 checkpoints (~486 MB each)
   are too large for git; SHA-256 sums in `TRAINING_LATEST.md` 5.2 / 6.5, files available from the team on request.
+- **Checkpoint download (added 2026-11-11, after the freeze; documentation only, tag `final` = fa1b979 unchanged):** KU OneDrive folder,
+  viewable by Khalifa University accounts: https://kuacae-my.sharepoint.com/:f:/g/personal/100065148_ku_ac_ae/IgCz8MctEnciQpDezcTuI0P7AblhRyTj8fYTHY3c4jFxyRI?e=84qE0h
+  (6 Chronos-2 checkpoints + `SHA256SUMS.txt`; put them in `outputs/arms/` and run `sha256sum -c SHA256SUMS.txt`).
 - Test-time inference of these blends needs one ≥ 16 GB GPU (TabPFN, Chronos-2). The CPU-auditable, bit-exact reference stays
   `submission_blendD_r12.csv` (`predict.py`, `VERIFY.md`).
 

@@ -54,6 +54,7 @@ Full day-by-day notes with every negative result are kept by the team (LESSONS.m
 - Generator configs: `src/outputs/factory/ku_gen_genT.json`, `ku_gen_genR1.json` … `ku_gen_genR11.json`, variants in `src/outputs/factory/var/`.
 - Checkpoints: `ckpt/seq/seqpre_mnR9_mt_c64.pt`, `ckpt/seq/seqpre_mnR10_mt_c64.pt`; manifests `manifests/blendXFS_*`.
 - Slides and figure scripts: `slides/`.
+- Report: `report_final.html` / `.pdf` updated to blendXFS / blendTFS (still 3 pages; entries in `REPORT_CHANGELOG.md`).
 
 ## Known limitations at the freeze
 
@@ -61,4 +62,3 @@ Full day-by-day notes with every negative result are kept by the team (LESSONS.m
   `TRAINING_LATEST.md`); the CPU-only bit-exact route is blendD_r12 (`predict.py`).
 - Chronos fine-tuning steps vary by about ±0.004 zero-shot AUC between fake chunks; retraining gives equal quality, not identical weights.
 - Stacker settings were chosen on the same OOF table, so the stacked OOF may be slightly optimistic (public-board sd ≈ 0.009).
-- `report_final.pdf` was last updated for blendNFS / blendOFS (`REPORT_CHANGELOG.md`); the newer results are in this file, the README and the slides.

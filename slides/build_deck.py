@@ -186,6 +186,7 @@ s = P.slides.add_slide(BL); s.background.fill.solid(); s.background.fill.fore_co
 tb(s, 0.6, 0.35, 12.1, 1.0, "Model how the data was made, then learn from it", size=32, bold=True, color=NAVY, anchor=MSO_ANCHOR.MIDDLE)
 s.shapes.add_picture("reports/final/hero/loop.png", Inches(0.45), Inches(1.45), width=Inches(12.4))
 tb(s, 0.6, 6.25, 12.1, 0.6, "Thank you — questions welcome", size=24, bold=True, color=NAVY, align=PP_ALIGN.CENTER)
+# added 11-11 (slide update): code + checkpoint link line, hyperlinked "link" run (see slides/README.md for the URL)
 s.notes_slide.notes_text_frame.text = ("[~15 s] To sum up: model how the data was made, learn from it without labels, and measure what is fixable before "
     "building. Thank you, we are happy to take questions.\n中文提示：三句话总结，然后请提问。")
 
